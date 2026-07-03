@@ -1,65 +1,136 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import Link from "next/link";
+import { useMemo } from "react";
+import TxnRow from "@/components/TxnRow";
+import WithdrawalCard from "@/components/WithdrawalCard";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { formatBDT, formatMonth } from "@/lib/format";
+import { useAccounts, useContainers, useMonthData } from "@/lib/hooks";
+import { useUIStore } from "@/lib/store";
+
+const HomePage = () => {
+  const accounts = useAccounts();
+  const containers = useContainers();
+  const openQuickEntry = useUIStore((s) => s.openQuickEntry);
+
+  const now = useMemo(() => new Date(), []);
+  const month = useMonthData(now.getFullYear(), now.getMonth());
+
+  const accountsTotal = useMemo(
+    () => (accounts ?? []).reduce((sum, a) => sum + a.balance, 0),
+    [accounts],
+  );
+  const cashInHand = useMemo(
+    () => (containers ?? []).reduce((sum, c) => sum + c.remainder, 0),
+    [containers],
+  );
+  const openContainers = (containers ?? []).filter((c) => c.remainder > 0);
+  const recent = (month?.transactions ?? []).slice(0, 5);
+  const loaded = accounts !== undefined;
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+    <div className="space-y-6">
+      <header>
+        <h1 className="text-xl font-bold">Hisaber Khata</h1>
+        <p className="text-sm text-muted-foreground">
+          {formatMonth(now.getFullYear(), now.getMonth())}
+        </p>
+      </header>
+
+      <Card className="border-none bg-primary py-5 text-primary-foreground shadow-lg shadow-primary/20">
+        <CardContent className="px-5">
+          <p className="text-sm opacity-80">Total money</p>
+          <p className="mt-1 text-4xl font-bold tabular-nums">
+            {formatBDT(accountsTotal + cashInHand)}
           </p>
+          <p className="mt-2 text-xs opacity-80">
+            {formatBDT(accountsTotal)} in accounts · {formatBDT(cashInHand)}{" "}
+            unspent cash
+          </p>
+        </CardContent>
+      </Card>
+
+      {loaded && accounts.length === 0 && (
+        <Card className="border-dashed border-primary/50 py-5 text-center">
+          <CardContent className="px-5">
+            <p className="mb-1 font-medium">Start your khata</p>
+            <p className="mb-3 text-sm text-muted-foreground">
+              Add your bank, bKash/Nagad, or cash-in-hand account first.
+            </p>
+            <Button asChild>
+              <Link href="/accounts">Add an account</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      <section className="grid grid-cols-3 gap-2 text-center">
+        {[
+          {
+            label: "Income",
+            value: month?.income ?? 0,
+            tone: "text-primary",
+          },
+          { label: "Spent", value: month?.spent ?? 0, tone: "" },
+          {
+            label: "Cash out",
+            value: month?.withdrawn ?? 0,
+            tone: "text-amber-600 dark:text-amber-400",
+          },
+        ].map((s) => (
+          <Card key={s.label} className="gap-0 px-2 py-3">
+            <p className="text-xs text-muted-foreground">{s.label}</p>
+            <p className={`mt-0.5 text-sm font-bold tabular-nums ${s.tone}`}>
+              {formatBDT(s.value)}
+            </p>
+          </Card>
+        ))}
+      </section>
+
+      {openContainers.length > 0 && (
+        <section>
+          <div className="mb-2 flex items-baseline justify-between">
+            <h2 className="font-semibold">Cash in hand</h2>
+            <Button
+              variant="link"
+              size="sm"
+              onClick={() => openQuickEntry("withdrawal")}
+              className="px-0"
+            >
+              + Cash out
+            </Button>
+          </div>
+          <div className="space-y-2">
+            {openContainers.slice(0, 3).map((c) => (
+              <WithdrawalCard key={c.txn.id} container={c} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      <section>
+        <div className="mb-1 flex items-baseline justify-between">
+          <h2 className="font-semibold">This month</h2>
+          <Button variant="link" size="sm" asChild className="px-0">
+            <Link href="/history">See all</Link>
+          </Button>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+        {recent.length === 0 ? (
+          <p className="py-4 text-center text-sm text-muted-foreground">
+            Nothing recorded yet this month. Tap + to add your first entry.
+          </p>
+        ) : (
+          <div className="divide-y">
+            {recent.map((t) => (
+              <TxnRow key={t.id} txn={t} />
+            ))}
+          </div>
+        )}
+      </section>
     </div>
   );
-}
+};
+
+export default HomePage;
