@@ -7,6 +7,8 @@ Core model: a withdrawal is a _parent transaction_; purchases from that cash are
 _child transactions_ attached lazily. Invariant: Σ(children) ≤ parent; remainder =
 parent − Σ(children). Dexie (IndexedDB) is the source of truth; Zustand is UI state
 only. Full concept, data model, phases, and UX principles: `docs/project-plan.md`.
+Balance semantics, invariants, and derived numbers: `docs/business-logic.md` —
+keep it updated when the rules change.
 
 ## Code Style
 
