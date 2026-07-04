@@ -1,66 +1,41 @@
 @AGENTS.md
 
-# Cash-First Money Manager — Project Plan
+# Cash-First Money Manager (hisaberkhata)
 
-## Concept
+A local-first, offline-first PWA for cash-heavy money management (Bangladesh, BDT ৳).
+Core model: a withdrawal is a _parent transaction_; purchases from that cash are
+_child transactions_ attached lazily. Invariant: Σ(children) ≤ parent; remainder =
+parent − Σ(children). Dexie (IndexedDB) is the source of truth; Zustand is UI state
+only. Full concept, data model, phases, and UX principles: `docs/project-plan.md`.
 
-A local-first PWA for managing day-to-day money in a cash-heavy economy (Bangladesh, BDT).
-Instead of tracking every transaction independently, it mirrors how cash actually flows:
-withdraw money → spend it gradually → account for it lazily.
+## Code Style
 
-## Core Differentiator
-
-**Withdrawal-as-container model.** An ATM/bKash cash-out becomes a _parent transaction_.
-Purchases made from that cash are attached as _child transactions_ — added lazily, over days.
-The unallocated remainder is always visible (e.g., "৳1,500 left from Jul 2 withdrawal").
-No forced categorization, no separate cash account drifting out of sync.
-
-## Tech Stack
-
-- **Next.js (App Router) + TypeScript** — client-heavy; server stays thin until Phase 3
-- **PWA via Serwist** — installable, fully offline (critical for in-store entry)
-- **Dexie.js (IndexedDB)** — local-first storage; `useLiveQuery` for reactive UI
-- **Zustand** — minimal UI state only (filters, modals); Dexie is the source of truth
-- **Tailwind CSS** — styling
-- **Phase 3 only:** Supabase + Next.js server actions for sync/family sharing
-
-## Data Model (3 tables)
-
-- **accounts** — id, name, type (bank | mfs | cash | credit), balance, `cards[]` (debit cards linked to bank/mfs accounts; for credit accounts, negative balance = dues)
-- **transactions** — id, accountId, `parentId` (nullable → enables grouping), amount, type (income | expense | withdrawal), category, note, date
-- **recurring_items** — id, name, amount, type (bill | income), dayOfMonth
-
-Invariant: sum of children ≤ parent amount; remainder = parent − Σ(children).
-
-## Phases
-
-### Phase 1 — MVP (build this first)
-
-- Accounts CRUD (bank, bKash/Nagad, cash-in-hand)
-- Record withdrawal → parent entry with purpose label
-- Tap parent → add child transactions anytime; remainder auto-calculated
-- Quick entry: amount + one-tap category, under 5 seconds
-- Transaction list grouped by parent, monthly overview
-
-### Phase 2 — Budgeting
-
-- Recurring bills & salary (recurring_items)
-- "After all bills, ৳X left this month" projection
-- Simple monthly category budgets
-
-### Phase 3 — Sync & friction reduction
-
-- Supabase sync via server actions (multi-device, family sharing)
-- Reports/charts
-- Optional companion Android app to forward bank SMS to the API
-
-## UX Principles
-
-- Entry speed is everything — no receipts exist, so logging must beat forgetting
-- Lazy allocation is a feature, not a bug — partial accounting is fine
-- Remainder always visible, never guilt-tripping
-- Offline-first: every Phase 1/2 feature must work with zero connectivity
-- Default currency: BDT (৳)
+- **Always use shadcn/ui** for any UI primitive (dialog, dropdown, tooltip, popover,
+  sheet, drawer, etc.). Do NOT hand-roll modals/overlays or pull in another UI library.
+  - Configured via `components.json` (style `radix-nova`, components in `components/ui/`).
+  - Add new components with the CLI: `npx shadcn@latest add <component>` (yarn 1.x has
+    no `dlx`, so use `npx`).
+  - ⚠️ The CLI may overwrite existing components it considers dependencies. Review
+    `git diff` after running and revert unintended changes.
+- **Always use arrow functions** — components and regular functions alike:
+  `const MyComponent = () => { ... }`, exported separately
+  (`export default MyComponent`).
+- **No magic strings** — use constants or object properties instead of hardcoded
+  strings (categories, account types, route paths, Dexie table names).
+- **Smallest client island, largest server shell**: `page.tsx` stays a server
+  component; extract only the parts that need the client (hooks, `useLiveQuery`,
+  event handlers) into `_component/` files with `"use client"`. Don't wrap a whole
+  page in one client component when a static shell (headings, layout) can stay on
+  the server. Exception: genuinely end-to-end interactive pages.
+- **Semantic Tailwind colors only**: use theme classes (`bg-background`, `bg-muted`,
+  `bg-accent`, `text-foreground`, `text-muted-foreground`, `border-border`) — never
+  hardcoded shades like `text-white` or `border-gray-800`.
+- **Gradients (Tailwind v4)**: use `bg-linear-to-*`, NOT the legacy
+  `bg-gradient-to-*` (all directions: `-t`, `-b`, `-l`, `-r`, `-tr`, `-tl`, `-br`, `-bl`).
+- **Icons inside buttons**: don't add `mr-2` — the shadcn Button already has `gap-2`.
+- **Route verb consistency**: route segments for new-resource pages always use
+  `create` (✅ `/accounts/create` ❌ `/accounts/add`). UI labels may say "Add" or
+  "Create", URLs never mix them.
 
 ## Forms
 
@@ -89,3 +64,10 @@ Invariant: sum of children ≤ parent amount; remainder = parent − Σ(children
   `simple-icons` package — Lucide removed brand icons. Wrap them in a small
   SVG component inside `components/Icon.tsx` and register them under a
   semantic name like any other icon.
+
+## Package Management
+
+- **Always use yarn** (`yarn add`, `yarn dev`, `yarn lint`), never npm. If a
+  `package-lock.json` ever appears, delete it.
+- Verify changes with `yarn lint` and `yarn build` (TypeScript + React Compiler
+  lint are strict here).
