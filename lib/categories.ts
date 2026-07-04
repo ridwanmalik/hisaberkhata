@@ -17,6 +17,7 @@ export const EXPENSE_CATEGORIES: Category[] = [
   { id: "health", label: "Health", icon: "health" },
   { id: "education", label: "Education", icon: "education" },
   { id: "clothing", label: "Clothing", icon: "clothing" },
+  { id: "personal-care", label: "Personal care", icon: "personal-care" },
   { id: "family", label: "Family", icon: "family" },
   { id: "pocket-money", label: "Pocket money", icon: "pocket-money" },
   { id: "charity", label: "Charity", icon: "charity" },

@@ -158,9 +158,7 @@ const AccountsPage = () => {
               </span>
               <div className="min-w-0 flex-1">
                 <p className="font-medium">Cash in hand</p>
-                <p className="text-xs text-muted-foreground">
-                  Unspent cash from cash-outs &amp; borrows
-                </p>
+                <p className="text-xs text-muted-foreground">Unspent cash from cash-outs &amp; borrows</p>
               </div>
               <p className="font-bold tabular-nums">{formatBDT(cashInHand)}</p>
             </CardContent>
@@ -172,7 +170,7 @@ const AccountsPage = () => {
             <Card
               key={a.id}
               onClick={() => openEdit(a)}
-              className={`cursor-pointer py-4 transition-colors active:bg-muted/50 ${hasCardFace ? "aspect-[1.7/1]" : ""}`}>
+              className={`cursor-pointer py-4 transition-colors active:bg-muted/50 ${hasCardFace ? "aspect-[1.71/1]" : ""}`}>
               <CardContent className="flex flex-1 flex-col px-6 py-4">
                 {hasCardFace && (
                   <div className="flex flex-1 items-end">

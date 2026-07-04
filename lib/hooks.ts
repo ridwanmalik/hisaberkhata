@@ -6,6 +6,7 @@ import { monthRange } from "./format";
 import { accountEffect } from "./money";
 import {
   CONTAINER_TYPES,
+  holdsCash,
   isContainerType,
   OPENING_BALANCE_LABEL,
   type Transaction,
@@ -45,7 +46,9 @@ const toContainer = async (txn: Transaction): Promise<Container> => {
   return {
     txn,
     spent,
-    remainder: txn.amount - spent,
+    // Borrows that landed in an account hold no spendable cash — the
+    // account does. Only the debt side of them is live.
+    remainder: holdsCash(txn) ? txn.amount - spent : 0,
     children,
     repayments,
     repaid,

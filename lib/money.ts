@@ -10,6 +10,7 @@ export const accountEffect = (t: Transaction, accountId: string): number => {
   if (!t.parentId && t.accountId === accountId) {
     if (t.type === "income") effect += t.amount;
     else if (t.type === "adjustment") effect += t.amount; // signed
+    else if (t.type === "borrow") effect += t.amount; // landed in this account
     else if (t.type === "expense" || t.type === "repayment")
       effect -= t.amount;
     else if (t.type === "withdrawal" || t.type === "transfer")

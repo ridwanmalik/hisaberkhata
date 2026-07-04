@@ -19,7 +19,12 @@ import {
 } from "@/components/ui/input-group";
 import { Progress } from "@/components/ui/progress";
 import { CURRENCY_SYMBOL, formatBDT, formatDate } from "@/lib/format";
-import { useAccounts, useContainer } from "@/lib/hooks";
+import {
+  useAccounts,
+  useContainer,
+  useContainers,
+  type Container,
+} from "@/lib/hooks";
 import { addRepayment, deleteTransaction } from "@/lib/repo";
 import { ROUTES } from "@/lib/routes";
 import { useUIStore } from "@/lib/store";
@@ -45,10 +50,14 @@ type RepayFormValues = z.infer<typeof repaySchema>;
 interface RepayFormProps {
   borrowId: string;
   accounts: Account[];
+  /** Cash containers with something left — handing over physical cash. */
+  cashSources: Container[];
 }
 
-const RepayForm = ({ borrowId, accounts }: RepayFormProps) => {
-  const [accountId, setAccountId] = useState(accounts[0]?.id ?? "");
+const RepayForm = ({ borrowId, accounts, cashSources }: RepayFormProps) => {
+  const [sourceId, setSourceId] = useState(
+    accounts[0]?.id ?? cashSources[0]?.txn.id ?? "",
+  );
   const form = useForm<RepayFormValues>({
     resolver: zodResolver(repaySchema),
     defaultValues: { amount: "" },
@@ -56,11 +65,14 @@ const RepayForm = ({ borrowId, accounts }: RepayFormProps) => {
 
   const onSubmit = async (values: RepayFormValues) => {
     try {
-      if (!accountId) throw new Error("Add an account first");
+      if (!sourceId) throw new Error("Add an account first");
+      const isAccount = accounts.some((a) => a.id === sourceId);
       await addRepayment({
         borrowId,
-        accountId,
         amount: Number(values.amount),
+        ...(isAccount
+          ? { accountId: sourceId }
+          : { fromContainerId: sourceId }),
       });
       form.reset();
     } catch (e) {
@@ -77,12 +89,25 @@ const RepayForm = ({ borrowId, accounts }: RepayFormProps) => {
           <Button
             key={a.id}
             type="button"
-            variant={accountId === a.id ? "default" : "outline"}
+            variant={sourceId === a.id ? "default" : "outline"}
             size="sm"
-            onClick={() => setAccountId(a.id)}
+            onClick={() => setSourceId(a.id)}
             className="shrink-0 rounded-full"
           >
             {a.name}
+          </Button>
+        ))}
+        {cashSources.map((c) => (
+          <Button
+            key={c.txn.id}
+            type="button"
+            variant={sourceId === c.txn.id ? "default" : "outline"}
+            size="sm"
+            onClick={() => setSourceId(c.txn.id)}
+            className="shrink-0 rounded-full"
+          >
+            <Icon name="cash" className="size-3.5" /> {c.txn.category} ·{" "}
+            {formatBDT(c.remainder)} left
           </Button>
         ))}
       </div>
@@ -124,6 +149,7 @@ const WithdrawalDetail = () => {
   const id = useSearchParams().get("id");
   const router = useRouter();
   const container = useContainer(id);
+  const containers = useContainers();
   const accounts = useAccounts();
   const openQuickEntry = useUIStore((s) => s.openQuickEntry);
   const openEditEntry = useUIStore((s) => s.openEditEntry);
@@ -144,7 +170,10 @@ const WithdrawalDetail = () => {
   const { txn, spent, remainder, children, repayments, repaid, owed } =
     container;
   const isBorrow = txn.type === "borrow";
+  // A borrow that landed in an account holds no cash — only its debt is live.
+  const isAccountBorrow = isBorrow && txn.accountId !== "";
   const account = accounts?.find((a) => a.id === txn.accountId);
+  const cashSources = (containers ?? []).filter((c) => c.remainder > 0);
   const pctLeft =
     txn.amount > 0
       ? Math.max(0, Math.min(100, (remainder / txn.amount) * 100))
@@ -173,7 +202,9 @@ const WithdrawalDetail = () => {
           <p className="text-xs text-muted-foreground">
             {formatDate(txn.date)}
             {isBorrow
-              ? ` · lent by ${txn.person}`
+              ? ` · lent by ${txn.person}${
+                  isAccountBorrow && account ? ` · into ${account.name}` : ""
+                }`
               : account
                 ? ` · from ${account.name}`
                 : ""}
@@ -190,6 +221,7 @@ const WithdrawalDetail = () => {
         </Button>
       </header>
 
+      {!isAccountBorrow && (
       <Card className="py-5 text-center">
         <CardContent className="px-5">
           <p className="text-sm text-muted-foreground">Left from this cash</p>
@@ -212,6 +244,7 @@ const WithdrawalDetail = () => {
           </Button>
         </CardContent>
       </Card>
+      )}
 
       {isBorrow && (
         <Card className="gap-0 py-4">
@@ -227,8 +260,18 @@ const WithdrawalDetail = () => {
                 {formatBDT(repaid)} repaid of {formatBDT(txn.amount)}
               </p>
             )}
+            {isAccountBorrow && account && (
+              <p className="text-xs text-muted-foreground">
+                The money went into {account.name} — spend it from there like
+                any balance.
+              </p>
+            )}
             {owed > 0 && (
-              <RepayForm borrowId={txn.id} accounts={accounts ?? []} />
+              <RepayForm
+                borrowId={txn.id}
+                accounts={accounts ?? []}
+                cashSources={cashSources}
+              />
             )}
             {repayments.length > 0 && (
               <div className="divide-y border-t">
@@ -247,6 +290,7 @@ const WithdrawalDetail = () => {
         </Card>
       )}
 
+      {!isAccountBorrow && (
       <section>
         <h2 className="mb-1 font-semibold">Spends from this cash</h2>
         {children.length === 0 ? (
@@ -268,6 +312,7 @@ const WithdrawalDetail = () => {
           </div>
         )}
       </section>
+      )}
 
       {txn.note && (
         <p className="text-sm text-muted-foreground">Note: {txn.note}</p>

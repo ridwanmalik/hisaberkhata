@@ -12,7 +12,7 @@ import { useContainers, useMonthData } from "@/lib/hooks";
 import { deleteTransaction } from "@/lib/repo";
 import { ROUTES } from "@/lib/routes";
 import { useUIStore } from "@/lib/store";
-import { isContainerType } from "@/lib/types";
+import { holdsCash, isContainerType } from "@/lib/types";
 
 const HistoryPage = () => {
   const { monthOffset, setMonthOffset } = useUIStore();
@@ -141,9 +141,11 @@ const HistoryPage = () => {
                       {isBorrow ? "+" : "−"}
                       {formatBDT(t.amount)}
                     </span>{" "}
-                    <span className="text-primary">
-                      · {formatBDT(c?.remainder ?? t.amount)} left
-                    </span>
+                    {holdsCash(t) && (
+                      <span className="text-primary">
+                        · {formatBDT(c?.remainder ?? t.amount)} left
+                      </span>
+                    )}
                     {isBorrow && (c?.owed ?? 0) > 0 && (
                       <span className="text-muted-foreground">
                         {" "}

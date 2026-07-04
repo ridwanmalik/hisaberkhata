@@ -1,6 +1,7 @@
 import { db } from "./db";
 import { newId } from "./id";
 import {
+  holdsCash,
   isContainerType,
   OPENING_BALANCE_LABEL,
   type Account,
@@ -276,43 +277,61 @@ interface BorrowInput {
   amount: number;
   /** Purpose label, like a withdrawal's. */
   category: string;
+  /** Account the money landed in; omit when it arrived as cash in hand. */
+  accountId?: string;
   note?: string;
   date?: number;
 }
 
 /**
- * Records cash borrowed from a person as a parent container. No account
- * balance changes — the cash arrives in hand, not in an account. The debt
- * stays outstanding until repayments against it add up to the amount.
+ * Records money borrowed from a person. Cash in hand (no accountId) becomes
+ * a parent container with child spends; money that landed in an account
+ * (e.g. bKash-to-bKash) credits that account instead — no container, the
+ * account holds it. Either way the debt stays outstanding until repayments
+ * add up to the amount.
  */
 export const addBorrow = async (input: BorrowInput): Promise<string> => {
   assertPositive(input.amount);
   if (!input.person.trim()) throw new Error("Say who lent the money");
   const id = newId();
-  await db.transactions.add({
-    id,
-    accountId: "",
-    parentId: null,
-    amount: input.amount,
-    type: "borrow",
-    category: input.category,
-    note: input.note ?? "",
-    date: input.date ?? Date.now(),
-    person: input.person.trim(),
+  await db.transaction("rw", [db.accounts, db.transactions], async () => {
+    let accountId = "";
+    if (input.accountId) {
+      const account = await db.accounts.get(input.accountId);
+      if (!account) throw new Error("Account not found");
+      accountId = account.id;
+      await db.accounts.update(account.id, {
+        balance: account.balance + input.amount,
+      });
+    }
+    await db.transactions.add({
+      id,
+      accountId,
+      parentId: null,
+      amount: input.amount,
+      type: "borrow",
+      category: input.category,
+      note: input.note ?? "",
+      date: input.date ?? Date.now(),
+      person: input.person.trim(),
+    });
   });
   return id;
 };
 
 interface RepaymentInput {
   borrowId: string;
-  /** The account the repayment is paid from. */
-  accountId: string;
   amount: number;
+  /** Pay from an account… */
+  accountId?: string;
+  /** …or hand over cash from a container (no balance effect — the cash
+   *  already left an account; it just reduces the container's remainder). */
+  fromContainerId?: string;
   note?: string;
   date?: number;
 }
 
-/** Pays back part (or all) of a borrow from an account. */
+/** Pays back part (or all) of a borrow from an account or from cash in hand. */
 export const addRepayment = async (input: RepaymentInput): Promise<string> => {
   assertPositive(input.amount);
   const id = newId();
@@ -325,23 +344,43 @@ export const addRepayment = async (input: RepaymentInput): Promise<string> => {
     if (repaid + input.amount > borrow.amount) {
       throw new Error("That's more than what is still owed");
     }
-    const account = await db.accounts.get(input.accountId);
-    if (!account) throw new Error("Account not found");
-    await db.transactions.add({
+    const common = {
       id,
-      accountId: input.accountId,
-      parentId: null,
       amount: input.amount,
-      type: "repayment",
+      type: "repayment" as const,
       category: "repayment",
       note: input.note ?? "",
       date: input.date ?? Date.now(),
       person: borrow.person,
       borrowId: borrow.id,
-    });
-    await db.accounts.update(account.id, {
-      balance: account.balance - input.amount,
-    });
+    };
+    if (input.fromContainerId) {
+      const parent = await db.transactions.get(input.fromContainerId);
+      if (!parent || !isContainerType(parent.type) || !holdsCash(parent)) {
+        throw new Error("Cash entry not found");
+      }
+      const spent = await childrenSum(parent.id);
+      if (spent + input.amount > parent.amount) {
+        throw new Error("Amount is more than what is left of this cash");
+      }
+      await db.transactions.add({
+        ...common,
+        accountId: parent.accountId,
+        parentId: parent.id,
+      });
+    } else {
+      if (!input.accountId) throw new Error("Pick where the money comes from");
+      const account = await db.accounts.get(input.accountId);
+      if (!account) throw new Error("Account not found");
+      await db.transactions.add({
+        ...common,
+        accountId: input.accountId,
+        parentId: null,
+      });
+      await db.accounts.update(account.id, {
+        balance: account.balance - input.amount,
+      });
+    }
   });
   return id;
 };
@@ -405,7 +444,7 @@ export const addChildExpense = async (
   const id = newId();
   await db.transaction("rw", [db.transactions], async () => {
     const parent = await db.transactions.get(parentId);
-    if (!parent || !isContainerType(parent.type)) {
+    if (!parent || !isContainerType(parent.type) || !holdsCash(parent)) {
       throw new Error("Cash entry not found");
     }
     const spent = await childrenSum(parentId);
@@ -475,6 +514,17 @@ export const updateTransaction = async (
         assertPositive(nextAmount);
       }
       const delta = nextAmount - txn.amount;
+      // Repayments (standalone or paid from a cash container) can never
+      // exceed what is still owed on their borrow.
+      if (txn.type === "repayment" && txn.borrowId) {
+        const borrow = await db.transactions.get(txn.borrowId);
+        if (borrow) {
+          const repaid = await repaidSum(borrow.id);
+          if (repaid + delta > borrow.amount) {
+            throw new Error("That's more than what is still owed");
+          }
+        }
+      }
       if (txn.parentId) {
         const parent = await db.transactions.get(txn.parentId);
         if (parent) {
@@ -502,20 +552,16 @@ export const updateTransaction = async (
             );
           }
         }
-        if (txn.type === "repayment" && txn.borrowId) {
-          const borrow = await db.transactions.get(txn.borrowId);
-          if (borrow) {
-            const repaid = await repaidSum(borrow.id);
-            if (repaid + delta > borrow.amount) {
-              throw new Error("That's more than what is still owed");
-            }
-          }
-        }
-        // Borrows have accountId "" — the lookup misses and no balance moves.
+        // Cash borrows have accountId "" — the lookup misses and no balance
+        // moves. Borrows that landed in an account move it like income.
         const account = await db.accounts.get(txn.accountId);
         if (account) {
           const sign =
-            txn.type === "income" || txn.type === "adjustment" ? 1 : -1;
+            txn.type === "income" ||
+            txn.type === "adjustment" ||
+            txn.type === "borrow"
+              ? 1
+              : -1;
           await db.accounts.update(account.id, {
             balance: account.balance + sign * delta,
           });
@@ -553,6 +599,9 @@ export const deleteTransaction = async (id: string): Promise<void> => {
         .equals(id)
         .toArray();
       for (const r of repayments) {
+        // Cash-container repayments never touched a balance — deleting them
+        // just returns the cash to their container's remainder.
+        if (r.parentId) continue;
         const account = await db.accounts.get(r.accountId);
         if (account) {
           await db.accounts.update(account.id, {
@@ -566,7 +615,11 @@ export const deleteTransaction = async (id: string): Promise<void> => {
       const account = await db.accounts.get(txn.accountId);
       if (account) {
         const sign =
-          txn.type === "income" || txn.type === "adjustment" ? -1 : 1;
+          txn.type === "income" ||
+          txn.type === "adjustment" ||
+          txn.type === "borrow"
+            ? -1
+            : 1;
         const reversal =
           txn.type === "transfer" || txn.type === "withdrawal"
             ? txn.amount + (txn.fee ?? 0)

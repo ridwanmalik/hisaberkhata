@@ -121,6 +121,8 @@ const QuickEntryForm = ({ initialType, lockedParentId, onDone }: FormProps) => {
   const [pickedAccountId, setPickedAccountId] = useState<string | null>(null);
   /** Transfer only: the receiving account. */
   const [toAccountId, setToAccountId] = useState<string | null>(null);
+  /** Borrow only: where the money landed. "" = cash in hand. */
+  const [borrowIntoId, setBorrowIntoId] = useState("");
   /** "" = straight from the account; otherwise a withdrawal container id. */
   const [sourceParentId, setSourceParentId] = useState(lockedParentId ?? "");
   const [storedAccountId] = useState(readLastAccount);
@@ -159,7 +161,11 @@ const QuickEntryForm = ({ initialType, lockedParentId, onDone }: FormProps) => {
         date: dateTimeInputToTs(values.date),
       };
       if (type === "borrow") {
-        await addBorrow({ ...common, person: values.person });
+        await addBorrow({
+          ...common,
+          person: values.person,
+          accountId: borrowIntoId || undefined,
+        });
       } else if (type === "transfer") {
         if (!accountId) throw new Error("Add an account first");
         storeLastAccount(accountId);
@@ -376,6 +382,28 @@ const QuickEntryForm = ({ initialType, lockedParentId, onDone }: FormProps) => {
                 No accounts yet — add one from the Accounts tab.
               </p>
             )}
+          </div>
+        </div>
+      )}
+
+      {type === "borrow" && (
+        <div className="mb-4">
+          <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Money landed in
+          </p>
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            <Chip active={!borrowIntoId} onClick={() => setBorrowIntoId("")}>
+              <Icon name="cash" className="size-3.5" /> Cash in hand
+            </Chip>
+            {(accounts ?? []).map((a) => (
+              <Chip
+                key={a.id}
+                active={borrowIntoId === a.id}
+                onClick={() => setBorrowIntoId(a.id)}
+              >
+                {a.name}
+              </Chip>
+            ))}
           </div>
         </div>
       )}

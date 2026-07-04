@@ -22,7 +22,7 @@ effects), `lib/hooks.ts` (derived numbers), `lib/types.ts` (shapes).
 | `income`              | +amount                                      |
 | `expense` (no parent) | −amount                                      |
 | `withdrawal` (parent) | −(amount + fee) — the cash lives in the container, fee is spending |
-| `borrow` (parent)     | none — cash came from the lender's pocket (`accountId: ""`) |
+| `borrow` (parent)     | none if cash in hand (`accountId: ""`); +amount if it landed in an account |
 | `repayment`           | −amount on the account it was paid from      |
 | `transfer`            | −(amount + fee) on source, +amount on destination |
 | `adjustment`          | +amount (signed — the only type where amount can be negative) |
@@ -48,11 +48,15 @@ effects), `lib/hooks.ts` (derived numbers), `lib/types.ts` (shapes).
 ## Borrows & debt
 
 - A borrow tracks two independent lifecycles:
-  1. **Cash**: spend it via children, like a withdrawal.
-  2. **Debt**: `owed = amount − Σ(repayments)`; settled at 0.
+  1. **The money**: cash-in-hand borrows are containers (spend via children);
+     account borrows credit the account and hold no cash (`holdsCash`) —
+     no children, no cash-in-hand contribution, remainder 0.
+  2. **Debt**: `owed = amount − Σ(repayments)`; settled at 0. Same for both.
 - **Invariant: Σ(repayments) ≤ borrow.amount.** A borrow can't shrink below
   what was already repaid.
-- Repayments reference the borrow via `borrowId` and copy `person` for display.
+- Repayments reference the borrow via `borrowId` and copy `person` for
+  display. They can be paid from an account (−amount) or from a cash
+  container (child row, no balance effect — reduces the remainder).
 
 ## Transfers
 

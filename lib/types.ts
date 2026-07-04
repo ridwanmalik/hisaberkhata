@@ -24,6 +24,17 @@ export const isContainerType = (
 ): type is "withdrawal" | "borrow" =>
   (CONTAINER_TYPES as readonly TransactionType[]).includes(type);
 
+/**
+ * Does this parent actually hold spendable cash? Borrows that landed in an
+ * account don't — the account holds the money, so no child spends and no
+ * cash-in-hand contribution.
+ */
+export const holdsCash = (
+  txn: Pick<Transaction, "type" | "accountId">,
+): boolean =>
+  txn.type === "withdrawal" ||
+  (txn.type === "borrow" && txn.accountId === "");
+
 /** A debit card linked to a bank/MFS account. Not a money source itself. */
 export interface LinkedCard {
   id: string;
