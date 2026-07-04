@@ -4,6 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useMemo, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import * as z from "zod";
+import { Icon } from "@/components/Icon";
 import Sheet from "@/components/Sheet";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -29,6 +30,7 @@ import {
   useMonthData,
   useRecurringItems,
 } from "@/lib/hooks";
+import { summarizeMoney } from "@/lib/money";
 import {
   addRecurringItem,
   deleteRecurringItem,
@@ -77,10 +79,10 @@ const BudgetPage = () => {
   const month = useMonthData(now.getFullYear(), now.getMonth());
 
   // -- Projection -----------------------------------------------------------
+  // Same "you have" logic as home: credit dues and borrowed debt don't
+  // drag the projection down.
   const available = useMemo(
-    () =>
-      (accounts ?? []).reduce((sum, a) => sum + a.balance, 0) +
-      (containers ?? []).reduce((sum, c) => sum + c.remainder, 0),
+    () => summarizeMoney(accounts, containers).have,
     [accounts, containers],
   );
   const upcomingBills = useMemo(
@@ -208,8 +210,11 @@ const BudgetPage = () => {
                 className="cursor-pointer py-3.5 transition-colors active:bg-muted/50"
               >
                 <CardContent className="flex items-center gap-3 px-4">
-                  <span className="text-xl">
-                    {r.type === "bill" ? "🧾" : "💼"}
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                    <Icon
+                      name={r.type === "bill" ? "receipt" : "salary"}
+                      className="size-4"
+                    />
                   </span>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium">{r.name}</p>
@@ -267,8 +272,12 @@ const BudgetPage = () => {
                 >
                   <CardContent className="px-4">
                     <div className="mb-1 flex items-baseline justify-between text-sm">
-                      <p className="font-medium">
-                        {cat.emoji} {cat.label}
+                      <p className="flex items-center gap-1.5 font-medium">
+                        <Icon
+                          name={cat.icon}
+                          className="size-4 text-muted-foreground"
+                        />
+                        {cat.label}
                       </p>
                       <p className="tabular-nums text-muted-foreground">
                         <span
@@ -320,7 +329,8 @@ const BudgetPage = () => {
                         onClick={() => field.onChange(t)}
                         className="py-2.5"
                       >
-                        {t === "bill" ? "🧾 Bill" : "💼 Income"}
+                        <Icon name={t === "bill" ? "receipt" : "salary"} />
+                        {t === "bill" ? "Bill" : "Income"}
                       </Button>
                     ))}
                   </div>
@@ -451,7 +461,7 @@ const BudgetPage = () => {
                         }}
                         className="h-auto flex-col gap-1 py-2 text-xs font-normal"
                       >
-                        <span className="text-lg">{c.emoji}</span>
+                        <Icon name={c.icon} className="size-4" />
                         {c.label}
                       </Button>
                     ))}

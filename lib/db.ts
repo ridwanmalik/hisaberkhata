@@ -19,6 +19,11 @@ class HisaberKhataDB extends Dexie {
     this.version(2).stores({
       transactions: "id, accountId, parentId, type, date, category, borrowId",
     });
+    // v3: transfers — account deletion cleans up transfers into it by index.
+    this.version(3).stores({
+      transactions:
+        "id, accountId, parentId, type, date, category, borrowId, toAccountId",
+    });
   }
 }
 

@@ -125,6 +125,7 @@ const WithdrawalDetail = () => {
   const container = useContainer(id);
   const accounts = useAccounts();
   const openQuickEntry = useUIStore((s) => s.openQuickEntry);
+  const openEditEntry = useUIStore((s) => s.openEditEntry);
   const [pendingDelete, setPendingDelete] = useState<PendingDelete>(null);
 
   if (container === undefined) return null; // still loading
@@ -160,9 +161,13 @@ const WithdrawalDetail = () => {
         >
           <Icon name="back" />
         </Button>
-        <div className="min-w-0">
-          <h1 className="truncate font-bold">
-            {isBorrow ? "🤝" : "💵"} {txn.category}
+        <div className="min-w-0 flex-1">
+          <h1 className="flex min-w-0 items-center gap-1.5 truncate font-bold">
+            <Icon
+              name={isBorrow ? "handshake" : "cash"}
+              className="size-4 shrink-0 text-muted-foreground"
+            />
+            <span className="truncate">{txn.category}</span>
           </h1>
           <p className="text-xs text-muted-foreground">
             {formatDate(txn.date)}
@@ -173,6 +178,15 @@ const WithdrawalDetail = () => {
                 : ""}
           </p>
         </div>
+        <Button
+          variant="secondary"
+          size="icon"
+          onClick={() => openEditEntry(txn.id)}
+          aria-label="Edit this entry"
+          className="rounded-full"
+        >
+          <Icon name="edit" />
+        </Button>
       </header>
 
       <Card className="py-5 text-center">
@@ -183,6 +197,7 @@ const WithdrawalDetail = () => {
           </p>
           <p className="mt-1 text-xs text-muted-foreground">
             of {formatBDT(txn.amount)} · {formatBDT(spent)} accounted
+            {txn.fee ? ` · ${formatBDT(txn.fee)} fee` : ""}
           </p>
           <Progress value={pctLeft} className="mt-3 h-2" />
           <Button

@@ -5,7 +5,8 @@ export type TransactionType =
   | "expense"
   | "withdrawal"
   | "borrow"
-  | "repayment";
+  | "repayment"
+  | "transfer";
 
 /** Parent types that hold spendable cash and take child expenses. */
 export const CONTAINER_TYPES = ["withdrawal", "borrow"] as const;
@@ -56,6 +57,10 @@ export interface Transaction {
   person?: string;
   /** Repayments: the borrow transaction this settles. */
   borrowId?: string;
+  /** Transfers: the receiving account. */
+  toAccountId?: string;
+  /** Transfers/withdrawals: fee charged on top of the amount, paid by the source. */
+  fee?: number;
 }
 
 export type RecurringType = "bill" | "income";

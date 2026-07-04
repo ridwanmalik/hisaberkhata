@@ -30,13 +30,15 @@ const newId = (): string => {
 //
 // - income:                +amount on the account
 // - expense (no parent):   -amount on the account
-// - withdrawal (parent):   -amount on the account; the cash lives in the
-//                          container from then on
+// - withdrawal (parent):   -(amount + fee) on the account; the cash lives in
+//                          the container from then on, the fee is spending
 // - borrow (parent):       no balance effect — the cash came from someone
 //                          else's pocket straight into the container. The
 //                          debt owed is tracked separately via repayments.
 // - repayment:             -amount on the account it was paid from; reduces
 //                          the borrow's outstanding debt, never its cash
+// - transfer:              -(amount + fee) on the source account, +amount on
+//                          the destination. Only the fee is real spending.
 // - expense (child):       no balance effect — the money already left the
 //                          account (or the lender's pocket) when the container
 //                          was created. Children only reduce the remainder.
@@ -123,6 +125,8 @@ export const removeLinkedCard = async (
 export const deleteAccount = async (id: string): Promise<void> => {
   await db.transaction("rw", [db.accounts, db.transactions], async () => {
     await db.transactions.where("accountId").equals(id).delete();
+    // Transfers into this account too — other balances stay as they are.
+    await db.transactions.where("toAccountId").equals(id).delete();
     await db.accounts.delete(id);
   });
 };
@@ -190,8 +194,14 @@ export const addExpense = async (input: EntryInput): Promise<string> => {
 };
 
 /** Records a cash-out as a parent container. `category` is the purpose label. */
-export const addWithdrawal = async (input: EntryInput): Promise<string> => {
+export const addWithdrawal = async (
+  input: EntryInput & { fee?: number },
+): Promise<string> => {
   assertPositive(input.amount);
+  const fee = input.fee ?? 0;
+  if (!Number.isFinite(fee) || fee < 0) {
+    throw new Error("Fee cannot be negative");
+  }
   const id = newId();
   await db.transaction("rw", [db.accounts, db.transactions], async () => {
     const account = await db.accounts.get(input.accountId);
@@ -205,9 +215,10 @@ export const addWithdrawal = async (input: EntryInput): Promise<string> => {
       category: input.category,
       note: input.note ?? "",
       date: input.date ?? Date.now(),
+      ...(fee > 0 ? { fee } : {}),
     });
     await db.accounts.update(account.id, {
-      balance: account.balance - input.amount,
+      balance: account.balance - input.amount - fee,
     });
   });
   return id;
@@ -289,6 +300,56 @@ export const addRepayment = async (input: RepaymentInput): Promise<string> => {
   return id;
 };
 
+interface TransferInput {
+  fromAccountId: string;
+  toAccountId: string;
+  amount: number;
+  /** Fee charged on top of the amount, paid by the source account. */
+  fee?: number;
+  note?: string;
+  date?: number;
+}
+
+/**
+ * Moves money between two accounts. Neither income nor expense — only the
+ * optional fee counts as spending. Paying a credit card bill is a transfer
+ * into the credit account (dues shrink).
+ */
+export const addTransfer = async (input: TransferInput): Promise<string> => {
+  assertPositive(input.amount);
+  const fee = input.fee ?? 0;
+  if (!Number.isFinite(fee) || fee < 0) {
+    throw new Error("Fee cannot be negative");
+  }
+  if (input.fromAccountId === input.toAccountId) {
+    throw new Error("Pick two different accounts");
+  }
+  const id = newId();
+  await db.transaction("rw", [db.accounts, db.transactions], async () => {
+    const from = await db.accounts.get(input.fromAccountId);
+    const to = await db.accounts.get(input.toAccountId);
+    if (!from || !to) throw new Error("Account not found");
+    await db.transactions.add({
+      id,
+      accountId: from.id,
+      parentId: null,
+      amount: input.amount,
+      type: "transfer",
+      // Denormalized label so rows render without account lookups.
+      category: `${from.name} → ${to.name}`,
+      note: input.note ?? "",
+      date: input.date ?? Date.now(),
+      toAccountId: to.id,
+      ...(fee > 0 ? { fee } : {}),
+    });
+    await db.accounts.update(from.id, {
+      balance: from.balance - input.amount - fee,
+    });
+    await db.accounts.update(to.id, { balance: to.balance + input.amount });
+  });
+  return id;
+};
+
 /** Attaches a spend to a cash container. Never touches account balances. */
 export const addChildExpense = async (
   parentId: string,
@@ -325,11 +386,39 @@ export const addChildExpense = async (
  */
 export const updateTransaction = async (
   id: string,
-  patch: Partial<Pick<Transaction, "amount" | "category" | "note" | "date">>,
+  patch: Partial<
+    Pick<Transaction, "amount" | "category" | "note" | "date" | "person" | "fee">
+  >,
 ): Promise<void> => {
   await db.transaction("rw", [db.accounts, db.transactions], async () => {
     const txn = await db.transactions.get(id);
     if (!txn) throw new Error("Transaction not found");
+    // Fee exists on transfers/withdrawals — a change moves the source balance.
+    if (
+      patch.fee !== undefined &&
+      (txn.type === "transfer" || txn.type === "withdrawal")
+    ) {
+      const nextFee = patch.fee;
+      if (!Number.isFinite(nextFee) || nextFee < 0) {
+        throw new Error("Fee cannot be negative");
+      }
+      const feeDelta = nextFee - (txn.fee ?? 0);
+      if (feeDelta !== 0) {
+        const source = await db.accounts.get(txn.accountId);
+        if (source) {
+          await db.accounts.update(source.id, {
+            balance: source.balance - feeDelta,
+          });
+        }
+      }
+    }
+    // Renaming a borrow's lender updates the display copy on its repayments.
+    if (patch.person !== undefined && txn.type === "borrow") {
+      await db.transactions
+        .where("borrowId")
+        .equals(txn.id)
+        .modify({ person: patch.person });
+    }
     const nextAmount = patch.amount ?? txn.amount;
     if (patch.amount !== undefined) {
       assertPositive(nextAmount);
@@ -378,6 +467,14 @@ export const updateTransaction = async (
             balance: account.balance + sign * delta,
           });
         }
+        if (txn.type === "transfer" && txn.toAccountId) {
+          const dest = await db.accounts.get(txn.toAccountId);
+          if (dest) {
+            await db.accounts.update(dest.id, {
+              balance: dest.balance + delta,
+            });
+          }
+        }
       }
     }
     await db.transactions.update(id, patch);
@@ -416,9 +513,21 @@ export const deleteTransaction = async (id: string): Promise<void> => {
       const account = await db.accounts.get(txn.accountId);
       if (account) {
         const sign = txn.type === "income" ? -1 : 1;
+        const reversal =
+          txn.type === "transfer" || txn.type === "withdrawal"
+            ? txn.amount + (txn.fee ?? 0)
+            : sign * txn.amount;
         await db.accounts.update(account.id, {
-          balance: account.balance + sign * txn.amount,
+          balance: account.balance + reversal,
         });
+      }
+      if (txn.type === "transfer" && txn.toAccountId) {
+        const dest = await db.accounts.get(txn.toAccountId);
+        if (dest) {
+          await db.accounts.update(dest.id, {
+            balance: dest.balance - txn.amount,
+          });
+        }
       }
     }
     await db.transactions.delete(id);

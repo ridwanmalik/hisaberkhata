@@ -124,8 +124,12 @@ const HistoryPage = () => {
                     href={`/withdrawal?id=${t.id}`}
                     className="flex items-baseline justify-between gap-2"
                   >
-                    <p className="truncate font-medium">
-                      {isBorrow ? "🤝" : "💵"} {t.category}
+                    <p className="flex min-w-0 items-center gap-1.5 truncate font-medium">
+                      <Icon
+                        name={isBorrow ? "handshake" : "cash"}
+                        className="size-4 shrink-0 text-muted-foreground"
+                      />
+                      <span className="truncate">{t.category}</span>
                     </p>
                     <p className="shrink-0 text-xs text-muted-foreground">
                       {formatDate(t.date)}

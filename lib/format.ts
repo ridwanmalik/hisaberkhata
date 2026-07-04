@@ -49,3 +49,17 @@ export const tsToDateInput = (ts: number): string => {
   const pad = (n: number) => String(n).padStart(2, "0")
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
+
+/** Converts a picker value ("yyyy-mm-dd HH:mm") to epoch ms. */
+export const dateTimeInputToTs = (value: string): number => {
+  const [date, time] = value.split(" ")
+  const [y, m, d] = date.split("-").map(Number)
+  const [hh, mm] = (time ?? "12:00").split(":").map(Number)
+  return new Date(y, m - 1, d, hh, mm).getTime()
+}
+
+export const tsToDateTimeInput = (ts: number): string => {
+  const d = new Date(ts)
+  const pad = (n: number) => String(n).padStart(2, "0")
+  return `${tsToDateInput(ts)} ${pad(d.getHours())}:${pad(d.getMinutes())}`
+}

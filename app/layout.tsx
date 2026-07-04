@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { SerwistProvider } from "@serwist/turbopack/react";
 import BottomNav from "@/components/BottomNav";
+import EditEntry from "@/components/EditEntry";
 import QuickEntry from "@/components/QuickEntry";
 import "./globals.css";
 
@@ -58,6 +59,7 @@ const RootLayout = ({
             {children}
           </main>
           <QuickEntry />
+          <EditEntry />
           <BottomNav />
         </SerwistProvider>
       </body>

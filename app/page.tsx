@@ -2,12 +2,14 @@
 
 import Link from "next/link";
 import { useMemo } from "react";
+import { Icon } from "@/components/Icon";
 import TxnRow from "@/components/TxnRow";
 import WithdrawalCard from "@/components/WithdrawalCard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatBDT, formatMonth } from "@/lib/format";
 import { useAccounts, useContainers, useMonthData } from "@/lib/hooks";
+import { summarizeMoney } from "@/lib/money";
 import { useUIStore } from "@/lib/store";
 
 const HomePage = () => {
@@ -18,36 +20,8 @@ const HomePage = () => {
   const now = useMemo(() => new Date(), []);
   const month = useMonthData(now.getFullYear(), now.getMonth());
 
-  // "You have" counts only money that actually exists — credit dues and
-  // borrowed debt live in the quiet "you owe" line instead of dragging the
-  // big number down.
-  const accountsTotal = useMemo(
-    () =>
-      (accounts ?? []).reduce(
-        (sum, a) =>
-          sum + (a.type === "credit" ? Math.max(0, a.balance) : a.balance),
-        0,
-      ),
-    [accounts],
-  );
-  const creditDues = useMemo(
-    () =>
-      (accounts ?? []).reduce(
-        (sum, a) =>
-          a.type === "credit" ? sum + Math.max(0, -a.balance) : sum,
-        0,
-      ),
-    [accounts],
-  );
-  const cashInHand = useMemo(
-    () => (containers ?? []).reduce((sum, c) => sum + c.remainder, 0),
-    [containers],
-  );
-  const borrowedOwed = useMemo(
-    () => (containers ?? []).reduce((sum, c) => sum + c.owed, 0),
-    [containers],
-  );
-  const youOwe = creditDues + borrowedOwed;
+  const { accountsTotal, cashInHand, have, creditDues, borrowedOwed, owe } =
+    useMemo(() => summarizeMoney(accounts, containers), [accounts, containers]);
   const openContainers = (containers ?? []).filter((c) => c.remainder > 0);
   const recent = (month?.transactions ?? []).slice(0, 5);
   const loaded = accounts !== undefined;
@@ -65,15 +39,15 @@ const HomePage = () => {
         <CardContent className="px-5">
           <p className="text-sm opacity-80">You have</p>
           <p className="mt-1 text-4xl font-bold tabular-nums">
-            {formatBDT(accountsTotal + cashInHand)}
+            {formatBDT(have)}
           </p>
           <p className="mt-2 text-xs opacity-80">
             {formatBDT(accountsTotal)} in accounts · {formatBDT(cashInHand)}{" "}
             unspent cash
           </p>
-          {youOwe > 0 && (
+          {owe > 0 && (
             <p className="mt-3 flex items-baseline justify-between gap-2 border-t border-primary-foreground/20 pt-2 text-xs opacity-70 tabular-nums">
-              <span>You owe {formatBDT(youOwe)}</span>
+              <span>You owe {formatBDT(owe)}</span>
               <span>
                 {creditDues > 0 && `${formatBDT(creditDues)} card dues`}
                 {creditDues > 0 && borrowedOwed > 0 && " · "}
@@ -122,8 +96,8 @@ const HomePage = () => {
           ))}
         </div>
         {((month?.borrowed ?? 0) > 0 || (month?.repaid ?? 0) > 0) && (
-          <p className="text-xs text-muted-foreground">
-            🤝{" "}
+          <p className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
+            <Icon name="handshake" className="size-3.5" />{" "}
             {(month?.borrowed ?? 0) > 0 &&
               `Borrowed ${formatBDT(month?.borrowed ?? 0)}`}
             {(month?.borrowed ?? 0) > 0 && (month?.repaid ?? 0) > 0 && " · "}

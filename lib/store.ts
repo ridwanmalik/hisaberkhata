@@ -13,6 +13,11 @@ interface UIState {
   openQuickEntry: (type?: TransactionType, parentId?: string | null) => void;
   closeQuickEntry: () => void;
 
+  /** Transaction being edited in the global edit sheet. */
+  editEntryId: string | null;
+  openEditEntry: (id: string) => void;
+  closeEditEntry: () => void;
+
   /** 0 = current month, -1 = previous month, … */
   monthOffset: number;
   setMonthOffset: (offset: number) => void;
@@ -29,6 +34,10 @@ export const useUIStore = create<UIState>((set) => ({
       quickEntryParentId: parentId,
     }),
   closeQuickEntry: () => set({ quickEntryOpen: false }),
+
+  editEntryId: null,
+  openEditEntry: (id) => set({ editEntryId: id }),
+  closeEditEntry: () => set({ editEntryId: null }),
 
   monthOffset: 0,
   setMonthOffset: (offset) => set({ monthOffset: offset }),

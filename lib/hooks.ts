@@ -58,6 +58,12 @@ export const useContainers = () =>
     return Promise.all(parents.map(toContainer));
   }, []);
 
+export const useTransaction = (id: string | null) =>
+  useLiveQuery(async () => {
+    if (!id) return null;
+    return (await db.transactions.get(id)) ?? null;
+  }, [id]);
+
 export const useContainer = (id: string | null) =>
   useLiveQuery(async () => {
     if (!id) return null;
@@ -101,6 +107,12 @@ export const useMonthData = (year: number, month: number) =>
         spent += t.amount;
         spentByCategory[t.category] =
           (spentByCategory[t.category] ?? 0) + t.amount;
+      }
+      // Transfers/withdrawals move money, not spend it — only fees are
+      // spending.
+      if ((t.type === "transfer" || t.type === "withdrawal") && t.fee) {
+        spent += t.fee;
+        spentByCategory.fees = (spentByCategory.fees ?? 0) + t.fee;
       }
     }
     return {
