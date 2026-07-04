@@ -23,14 +23,7 @@ import {
 import { Progress } from "@/components/ui/progress";
 import { EXPENSE_CATEGORIES, categoryById } from "@/lib/categories";
 import { CURRENCY_SYMBOL, formatBDT } from "@/lib/format";
-import {
-  useAccounts,
-  useBudgets,
-  useContainers,
-  useMonthData,
-  useRecurringItems,
-} from "@/lib/hooks";
-import { summarizeMoney } from "@/lib/money";
+import { useBudgets, useMonthData, useRecurringItems } from "@/lib/hooks";
 import {
   addRecurringItem,
   deleteRecurringItem,
@@ -70,29 +63,30 @@ const budgetSchema = z.object({
 type BudgetFormValues = z.infer<typeof budgetSchema>;
 
 const BudgetPage = () => {
-  const accounts = useAccounts();
-  const containers = useContainers();
   const recurring = useRecurringItems();
   const budgets = useBudgets();
 
   const now = useMemo(() => new Date(), []);
   const month = useMonthData(now.getFullYear(), now.getMonth());
 
-  // -- Projection -----------------------------------------------------------
-  // Same "you have" logic as home: credit dues and borrowed debt don't
-  // drag the projection down.
-  const available = useMemo(
-    () => summarizeMoney(accounts, containers).have,
-    [accounts, containers],
-  );
-  const upcomingBills = useMemo(
+  // -- The monthly plan -------------------------------------------------------
+  // Built purely from recurring items + actual spending. The budget is a
+  // plan, so account balances never appear here — that's home's job.
+  const plannedIncome = useMemo(
     () =>
       (recurring ?? [])
-        .filter((r) => r.type === "bill" && r.dayOfMonth >= now.getDate())
+        .filter((r) => r.type === "income")
         .reduce((sum, r) => sum + r.amount, 0),
-    [recurring, now],
+    [recurring],
   );
-  const afterBills = available - upcomingBills;
+  const plannedBills = useMemo(
+    () =>
+      (recurring ?? [])
+        .filter((r) => r.type === "bill")
+        .reduce((sum, r) => sum + r.amount, 0),
+    [recurring],
+  );
+  const freeAfterBills = plannedIncome - plannedBills;
 
   // -- Recurring item sheet ---------------------------------------------------
   const [recSheetOpen, setRecSheetOpen] = useState(false);
@@ -173,14 +167,24 @@ const BudgetPage = () => {
 
       <Card className="border-none bg-primary py-5 text-primary-foreground shadow-lg shadow-primary/20">
         <CardContent className="px-5">
-          <p className="text-sm opacity-80">After all bills</p>
+          <p className="text-sm opacity-80">Free after bills each month</p>
           <p className="mt-1 text-4xl font-bold tabular-nums">
-            {formatBDT(afterBills)}
+            {formatBDT(freeAfterBills)}
           </p>
           <p className="mt-2 text-xs opacity-80">
-            {formatBDT(available)} available − {formatBDT(upcomingBills)} bills
-            still due this month
+            {formatBDT(plannedIncome)} planned income −{" "}
+            {formatBDT(plannedBills)} bills
           </p>
+          {(month?.spent ?? 0) > 0 && (
+            <p className="mt-3 flex items-baseline justify-between gap-2 border-t border-primary-foreground/20 pt-2 text-xs opacity-70 tabular-nums">
+              <span>Spent so far this month</span>
+              <span>
+                {formatBDT(month?.spent ?? 0)}
+                {freeAfterBills > 0 &&
+                  ` of ${formatBDT(freeAfterBills)}`}
+              </span>
+            </p>
+          )}
         </CardContent>
       </Card>
 

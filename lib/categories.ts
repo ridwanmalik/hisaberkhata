@@ -18,6 +18,8 @@ export const EXPENSE_CATEGORIES: Category[] = [
   { id: "education", label: "Education", icon: "education" },
   { id: "clothing", label: "Clothing", icon: "clothing" },
   { id: "family", label: "Family", icon: "family" },
+  { id: "pocket-money", label: "Pocket money", icon: "pocket-money" },
+  { id: "charity", label: "Charity", icon: "charity" },
   { id: "gifts", label: "Gifts", icon: "gift" },
   { id: "fees", label: "Fees", icon: "fees" },
   { id: "other", label: "Other", icon: "receipt" },

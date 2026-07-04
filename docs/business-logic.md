@@ -87,6 +87,7 @@ Computed in one place: `summarizeMoney` in `lib/money.ts`.
 
 - `recurring_items`: bills/income templates by `dayOfMonth` — projections
   only, they never create transactions themselves.
-- Budget page: **After all bills** = You have − upcoming bills (bills with
-  `dayOfMonth` ≥ today). Same "have" logic as home — credit dues excluded.
+- Budget page is a **plan, never balances**: Free after bills = planned
+  income − planned bills (full-month recurring totals), tracked against
+  actual Spent. Current balances belong to home only.
 - Budgets: one monthly limit per category; setting a budget ≤ 0 deletes it.
