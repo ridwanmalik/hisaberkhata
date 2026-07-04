@@ -25,6 +25,7 @@ import {
   ReceiptText,
   Shirt,
   ShoppingCart,
+  SlidersHorizontal,
   Smartphone,
   SmartphoneCharging,
   Store,
@@ -66,6 +67,7 @@ const ICONS = {
   // Money-flow types
   handshake: Handshake,
   transfer: ArrowLeftRight,
+  adjust: SlidersHorizontal,
   // Spending categories
   bazar: ShoppingCart,
   food: Utensils,

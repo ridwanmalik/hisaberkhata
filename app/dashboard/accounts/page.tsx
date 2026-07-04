@@ -9,10 +9,12 @@ import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field
 import { Input } from "@/components/ui/input"
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group"
 import { CURRENCY_SYMBOL, formatBDT } from "@/lib/format"
-import { useAccounts } from "@/lib/hooks"
+import { useAccounts, useContainers } from "@/lib/hooks"
 import { addAccount, addLinkedCard, deleteAccount, removeLinkedCard, updateAccount } from "@/lib/repo"
+import { ROUTES } from "@/lib/routes"
 import type { Account, AccountType } from "@/lib/types"
 import { zodResolver } from "@hookform/resolvers/zod"
+import Link from "next/link"
 import { useState } from "react"
 import { Controller, useForm, useWatch } from "react-hook-form"
 import * as z from "zod"
@@ -56,6 +58,8 @@ const emptyAccount: AccountFormValues = {
 
 const AccountsPage = () => {
   const accounts = useAccounts()
+  const containers = useContainers()
+  const cashInHand = (containers ?? []).reduce((sum, c) => sum + c.remainder, 0)
   const [sheetOpen, setSheetOpen] = useState(false)
   const [editing, setEditing] = useState<Account | null>(null)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
@@ -146,6 +150,22 @@ const AccountsPage = () => {
       )}
 
       <div className="space-y-2">
+        {cashInHand > 0 && (
+          <Card className="border-dashed py-4">
+            <CardContent className="flex items-center gap-3 px-6">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                <Icon name="cash" className="size-5" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="font-medium">Cash in hand</p>
+                <p className="text-xs text-muted-foreground">
+                  Unspent cash from cash-outs &amp; borrows
+                </p>
+              </div>
+              <p className="font-bold tabular-nums">{formatBDT(cashInHand)}</p>
+            </CardContent>
+          </Card>
+        )}
         {(accounts ?? []).map(a => {
           const hasCardFace = a.type === "credit" || (a.cards ?? []).length > 0
           return (
@@ -190,6 +210,13 @@ const AccountsPage = () => {
       <Sheet open={sheetOpen} onClose={() => setSheetOpen(false)} title={editing ? "Edit account" : "New account"}>
         <form onSubmit={form.handleSubmit(onSubmit)}>
           <FieldGroup className="gap-4">
+            {editing && (
+              <Button type="button" variant="outline" asChild className="w-full">
+                <Link href={ROUTES.accountStatement(editing.id)}>
+                  <Icon name="history" /> View statement
+                </Link>
+              </Button>
+            )}
             <Controller
               name="name"
               control={form.control}
@@ -251,6 +278,11 @@ const AccountsPage = () => {
                       placeholder={editing ? "0" : "Opening balance (0 is fine)"}
                     />
                   </InputGroup>
+                  <p className="text-xs text-muted-foreground">
+                    {editing
+                      ? "Changing this is saved as a dated adjustment entry."
+                      : "Saved as an “Opening balance” entry you can edit later."}
+                  </p>
                   {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
                 </Field>
               )}

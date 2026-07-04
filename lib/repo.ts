@@ -1,29 +1,14 @@
 import { db } from "./db";
+import { newId } from "./id";
 import {
   isContainerType,
+  OPENING_BALANCE_LABEL,
   type Account,
   type AccountType,
   type RecurringItem,
   type RecurringType,
   type Transaction,
 } from "./types";
-
-/**
- * crypto.randomUUID() only exists in secure contexts (HTTPS/localhost), so
- * opening the dev server via LAN IP (http://192.168.x.x) on a phone would
- * break every save. Fall back to building a v4 UUID from getRandomValues,
- * which works everywhere.
- */
-const newId = (): string => {
-  if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
-  const bytes = crypto.getRandomValues(new Uint8Array(16));
-  bytes[6] = (bytes[6] & 0x0f) | 0x40; // version 4
-  bytes[8] = (bytes[8] & 0x3f) | 0x80; // variant 10
-  const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join(
-    "",
-  );
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
-};
 
 // ---------------------------------------------------------------------------
 // Balance semantics
@@ -39,6 +24,12 @@ const newId = (): string => {
 //                          the borrow's outstanding debt, never its cash
 // - transfer:              -(amount + fee) on the source account, +amount on
 //                          the destination. Only the fee is real spending.
+// - adjustment:            +amount (SIGNED — the one type where amount can be
+//                          negative). Opening balances and manual balance
+//                          edits; never income or spending.
+//
+// Invariant: account.balance always equals the sum of its entries' effects —
+// opening balances and balance edits are entries too, never silent writes.
 // - expense (child):       no balance effect — the money already left the
 //                          account (or the lender's pocket) when the container
 //                          was created. Children only reduce the remainder.
@@ -68,6 +59,42 @@ export const repaidSum = async (borrowId: string): Promise<number> => {
 
 // -- Accounts ---------------------------------------------------------------
 
+interface AdjustmentInput {
+  accountId: string;
+  /** Signed: positive raises the balance, negative lowers it. */
+  amount: number;
+  /** Display label, e.g. "Opening balance". */
+  label: string;
+  note?: string;
+  date?: number;
+}
+
+/** Records a signed balance adjustment entry and applies it to the account. */
+export const addAdjustment = async (input: AdjustmentInput): Promise<string> => {
+  if (!Number.isFinite(input.amount) || input.amount === 0) {
+    throw new Error("Adjustment cannot be zero");
+  }
+  const id = newId();
+  await db.transaction("rw", [db.accounts, db.transactions], async () => {
+    const account = await db.accounts.get(input.accountId);
+    if (!account) throw new Error("Account not found");
+    await db.transactions.add({
+      id,
+      accountId: input.accountId,
+      parentId: null,
+      amount: input.amount,
+      type: "adjustment",
+      category: input.label,
+      note: input.note ?? "",
+      date: input.date ?? Date.now(),
+    });
+    await db.accounts.update(account.id, {
+      balance: account.balance + input.amount,
+    });
+  });
+  return id;
+};
+
 export const addAccount = async (
   name: string,
   type: AccountType,
@@ -75,13 +102,19 @@ export const addAccount = async (
   extras?: Pick<Account, "last4" | "creditLimit">,
 ): Promise<string> => {
   const id = newId();
-  await db.accounts.add({
-    id,
-    name,
-    type,
-    balance,
-    createdAt: Date.now(),
-    ...extras,
+  await db.transaction("rw", [db.accounts, db.transactions], async () => {
+    const createdAt = Date.now();
+    // Balance starts at 0 — the opening balance arrives as an entry, so the
+    // account's history explains every taka from day one.
+    await db.accounts.add({ id, name, type, balance: 0, createdAt, ...extras });
+    if (balance !== 0) {
+      await addAdjustment({
+        accountId: id,
+        amount: balance,
+        label: OPENING_BALANCE_LABEL,
+        date: createdAt,
+      });
+    }
   });
   return id;
 };
@@ -92,7 +125,20 @@ export const updateAccount = async (
     Pick<Account, "name" | "type" | "balance" | "last4" | "creditLimit">
   >,
 ): Promise<void> => {
-  await db.accounts.update(id, patch);
+  await db.transaction("rw", [db.accounts, db.transactions], async () => {
+    const account = await db.accounts.get(id);
+    if (!account) throw new Error("Account not found");
+    const { balance, ...rest } = patch;
+    await db.accounts.update(id, rest);
+    // Balance edits leave a paper trail instead of silently overwriting.
+    if (balance !== undefined && balance !== account.balance) {
+      await addAdjustment({
+        accountId: id,
+        amount: balance - account.balance,
+        label: "Balance adjusted",
+      });
+    }
+  });
 };
 
 export const addLinkedCard = async (
@@ -421,7 +467,13 @@ export const updateTransaction = async (
     }
     const nextAmount = patch.amount ?? txn.amount;
     if (patch.amount !== undefined) {
-      assertPositive(nextAmount);
+      if (txn.type === "adjustment") {
+        if (!Number.isFinite(nextAmount) || nextAmount === 0) {
+          throw new Error("Adjustment cannot be zero");
+        }
+      } else {
+        assertPositive(nextAmount);
+      }
       const delta = nextAmount - txn.amount;
       if (txn.parentId) {
         const parent = await db.transactions.get(txn.parentId);
@@ -462,7 +514,8 @@ export const updateTransaction = async (
         // Borrows have accountId "" — the lookup misses and no balance moves.
         const account = await db.accounts.get(txn.accountId);
         if (account) {
-          const sign = txn.type === "income" ? 1 : -1;
+          const sign =
+            txn.type === "income" || txn.type === "adjustment" ? 1 : -1;
           await db.accounts.update(account.id, {
             balance: account.balance + sign * delta,
           });
@@ -512,7 +565,8 @@ export const deleteTransaction = async (id: string): Promise<void> => {
     if (!txn.parentId) {
       const account = await db.accounts.get(txn.accountId);
       if (account) {
-        const sign = txn.type === "income" ? -1 : 1;
+        const sign =
+          txn.type === "income" || txn.type === "adjustment" ? -1 : 1;
         const reversal =
           txn.type === "transfer" || txn.type === "withdrawal"
             ? txn.amount + (txn.fee ?? 0)

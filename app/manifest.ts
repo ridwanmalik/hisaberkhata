@@ -5,7 +5,9 @@ const manifest = (): MetadataRoute.Manifest => ({
   short_name: "Khata",
   description:
     "Cash-first money manager. Withdraw, spend, account for it lazily.",
-  start_url: "/",
+  // Installed app opens straight into the dashboard — the landing page's
+  // fake login is only for the browser entry (until real auth in Phase 3).
+  start_url: "/dashboard",
   display: "standalone",
   orientation: "portrait",
   background_color: "#0a0a0a",

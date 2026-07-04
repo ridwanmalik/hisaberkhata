@@ -10,6 +10,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { formatBDT, formatDate, formatMonth } from "@/lib/format";
 import { useContainers, useMonthData } from "@/lib/hooks";
 import { deleteTransaction } from "@/lib/repo";
+import { ROUTES } from "@/lib/routes";
 import { useUIStore } from "@/lib/store";
 import { isContainerType } from "@/lib/types";
 
@@ -121,7 +122,7 @@ const HistoryPage = () => {
               <Card key={t.id} className="gap-0 py-4">
                 <CardContent className="px-4">
                   <Link
-                    href={`/withdrawal?id=${t.id}`}
+                    href={ROUTES.withdrawal(t.id)}
                     className="flex items-baseline justify-between gap-2"
                   >
                     <p className="flex min-w-0 items-center gap-1.5 truncate font-medium">
@@ -163,7 +164,7 @@ const HistoryPage = () => {
                   )}
                   <div className="mt-2 flex justify-end gap-1">
                     <Button variant="link" size="xs" asChild>
-                      <Link href={`/withdrawal?id=${t.id}`}>Open</Link>
+                      <Link href={ROUTES.withdrawal(t.id)}>Open</Link>
                     </Button>
                     <Button
                       variant="ghost"

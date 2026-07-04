@@ -21,6 +21,7 @@ import { Progress } from "@/components/ui/progress";
 import { CURRENCY_SYMBOL, formatBDT, formatDate } from "@/lib/format";
 import { useAccounts, useContainer } from "@/lib/hooks";
 import { addRepayment, deleteTransaction } from "@/lib/repo";
+import { ROUTES } from "@/lib/routes";
 import { useUIStore } from "@/lib/store";
 import type { Account } from "@/lib/types";
 
@@ -134,7 +135,7 @@ const WithdrawalDetail = () => {
       <div className="py-16 text-center text-sm text-muted-foreground">
         <p>This entry doesn&apos;t exist (it may have been deleted).</p>
         <Button variant="link" asChild>
-          <Link href="/history">Back to history</Link>
+          <Link href={ROUTES.history}>Back to history</Link>
         </Button>
       </div>
     );
@@ -311,7 +312,7 @@ const WithdrawalDetail = () => {
             await deleteTransaction(pendingDelete.id);
           } else if (pendingDelete?.kind === "parent") {
             await deleteTransaction(txn.id);
-            router.push("/history");
+            router.push(ROUTES.history);
           }
           setPendingDelete(null);
         }}

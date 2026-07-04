@@ -1,155 +1,40 @@
-"use client";
-
 import Link from "next/link";
-import { useMemo } from "react";
-import { Icon } from "@/components/Icon";
-import TxnRow from "@/components/TxnRow";
-import WithdrawalCard from "@/components/WithdrawalCard";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { formatBDT, formatMonth } from "@/lib/format";
-import { useAccounts, useContainers, useMonthData } from "@/lib/hooks";
-import { summarizeMoney } from "@/lib/money";
-import { useUIStore } from "@/lib/store";
+import { ROUTES } from "@/lib/routes";
 
-const HomePage = () => {
-  const accounts = useAccounts();
-  const containers = useContainers();
-  const openQuickEntry = useUIStore((s) => s.openQuickEntry);
-
-  const now = useMemo(() => new Date(), []);
-  const month = useMonthData(now.getFullYear(), now.getMonth());
-
-  const { accountsTotal, cashInHand, have, creditDues, borrowedOwed, owe } =
-    useMemo(() => summarizeMoney(accounts, containers), [accounts, containers]);
-  const openContainers = (containers ?? []).filter((c) => c.remainder > 0);
-  const recent = (month?.transactions ?? []).slice(0, 5);
-  const loaded = accounts !== undefined;
-
-  return (
-    <div className="space-y-6">
-      <header>
-        <h1 className="text-xl font-bold">Hisaber Khata</h1>
-        <p className="text-sm text-muted-foreground">
-          {formatMonth(now.getFullYear(), now.getMonth())}
-        </p>
-      </header>
-
-      <Card className="border-none bg-primary py-5 text-primary-foreground shadow-lg shadow-primary/20">
-        <CardContent className="px-5">
-          <p className="text-sm opacity-80">You have</p>
-          <p className="mt-1 text-4xl font-bold tabular-nums">
-            {formatBDT(have)}
-          </p>
-          <p className="mt-2 text-xs opacity-80">
-            {formatBDT(accountsTotal)} in accounts · {formatBDT(cashInHand)}{" "}
-            unspent cash
-          </p>
-          {owe > 0 && (
-            <p className="mt-3 flex items-baseline justify-between gap-2 border-t border-primary-foreground/20 pt-2 text-xs opacity-70 tabular-nums">
-              <span>You owe {formatBDT(owe)}</span>
-              <span>
-                {creditDues > 0 && `${formatBDT(creditDues)} card dues`}
-                {creditDues > 0 && borrowedOwed > 0 && " · "}
-                {borrowedOwed > 0 && `${formatBDT(borrowedOwed)} borrowed`}
-              </span>
-            </p>
-          )}
-        </CardContent>
-      </Card>
-
-      {loaded && accounts.length === 0 && (
-        <Card className="border-dashed border-primary/50 py-5 text-center">
-          <CardContent className="px-5">
-            <p className="mb-1 font-medium">Start your khata</p>
-            <p className="mb-3 text-sm text-muted-foreground">
-              Add your bank, bKash/Nagad, or cash-in-hand account first.
-            </p>
-            <Button asChild>
-              <Link href="/accounts">Add an account</Link>
-            </Button>
-          </CardContent>
-        </Card>
-      )}
-
-      <section className="space-y-2 text-center">
-        <div className="grid grid-cols-3 gap-2">
-          {[
-            {
-              label: "Income",
-              value: month?.income ?? 0,
-              tone: "text-primary",
-            },
-            { label: "Spent", value: month?.spent ?? 0, tone: "" },
-            {
-              label: "Cash out",
-              value: month?.withdrawn ?? 0,
-              tone: "text-amber-600 dark:text-amber-400",
-            },
-          ].map((s) => (
-            <Card key={s.label} className="gap-0 px-2 py-3">
-              <p className="text-xs text-muted-foreground">{s.label}</p>
-              <p className={`mt-0.5 text-sm font-bold tabular-nums ${s.tone}`}>
-                {formatBDT(s.value)}
-              </p>
-            </Card>
-          ))}
-        </div>
-        {((month?.borrowed ?? 0) > 0 || (month?.repaid ?? 0) > 0) && (
-          <p className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
-            <Icon name="handshake" className="size-3.5" />{" "}
-            {(month?.borrowed ?? 0) > 0 &&
-              `Borrowed ${formatBDT(month?.borrowed ?? 0)}`}
-            {(month?.borrowed ?? 0) > 0 && (month?.repaid ?? 0) > 0 && " · "}
-            {(month?.repaid ?? 0) > 0 &&
-              `Repaid ${formatBDT(month?.repaid ?? 0)}`}{" "}
-            this month
-          </p>
-        )}
-      </section>
-
-      {openContainers.length > 0 && (
-        <section>
-          <div className="mb-2 flex items-baseline justify-between">
-            <h2 className="font-semibold">Cash in hand</h2>
-            <Button
-              variant="link"
-              size="sm"
-              onClick={() => openQuickEntry("withdrawal")}
-              className="px-0"
-            >
-              + Cash out
-            </Button>
-          </div>
-          <div className="space-y-2">
-            {openContainers.slice(0, 3).map((c) => (
-              <WithdrawalCard key={c.txn.id} container={c} />
-            ))}
-          </div>
-        </section>
-      )}
-
-      <section>
-        <div className="mb-1 flex items-baseline justify-between">
-          <h2 className="font-semibold">This month</h2>
-          <Button variant="link" size="sm" asChild className="px-0">
-            <Link href="/history">See all</Link>
-          </Button>
-        </div>
-        {recent.length === 0 ? (
-          <p className="py-4 text-center text-sm text-muted-foreground">
-            Nothing recorded yet this month. Tap + to add your first entry.
-          </p>
-        ) : (
-          <div className="divide-y">
-            {recent.map((t) => (
-              <TxnRow key={t.id} txn={t} />
-            ))}
-          </div>
-        )}
-      </section>
+/**
+ * Landing page. Auth doesn't exist yet — both buttons just enter the
+ * dashboard. When real auth lands (Phase 3), wire them up here.
+ */
+const LandingPage = () => (
+  <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col justify-between px-6 py-12">
+    <div className="flex flex-1 flex-col items-center justify-center text-center">
+      <span className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary text-3xl font-bold text-primary-foreground">
+        ৳
+      </span>
+      <h1 className="text-3xl font-bold">Hisaber Khata</h1>
+      <p className="mt-2 text-sm text-muted-foreground">
+        হিসাবের খাতা — a cash-first money manager.
+        <br />
+        Withdraw, spend, account for it lazily.
+      </p>
     </div>
-  );
-};
+    <div className="space-y-3">
+      <Button asChild className="h-12 w-full text-base font-semibold">
+        <Link href={ROUTES.dashboard}>Log in</Link>
+      </Button>
+      <Button
+        asChild
+        variant="outline"
+        className="h-12 w-full text-base font-semibold"
+      >
+        <Link href={ROUTES.dashboard}>Sign up</Link>
+      </Button>
+      <p className="pt-1 text-center text-xs text-muted-foreground">
+        No account needed yet — everything stays on your device.
+      </p>
+    </div>
+  </div>
+);
 
-export default HomePage;
+export default LandingPage;

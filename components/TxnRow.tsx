@@ -4,6 +4,7 @@ import { Icon, type IconName } from "@/components/Icon";
 import { Button } from "@/components/ui/button";
 import { categoryIcon, categoryLabel } from "@/lib/categories";
 import { formatBDT, formatDate } from "@/lib/format";
+import { useAccounts } from "@/lib/hooks";
 import { useUIStore } from "@/lib/store";
 import type { Transaction } from "@/lib/types";
 
@@ -16,25 +17,38 @@ interface TxnRowProps {
 
 const TxnRow = ({ txn, onDelete, compact }: TxnRowProps) => {
   const openEditEntry = useUIStore((s) => s.openEditEntry);
+  const accounts = useAccounts();
   const isIncome = txn.type === "income";
   const isWithdrawal = txn.type === "withdrawal";
   const isBorrow = txn.type === "borrow";
   const isRepayment = txn.type === "repayment";
   const isTransfer = txn.type === "transfer";
+  const isAdjustment = txn.type === "adjustment";
   const icon: IconName = isWithdrawal
     ? "cash"
     : isBorrow || isRepayment
       ? "handshake"
       : isTransfer
         ? "transfer"
-        : categoryIcon(txn.category);
+        : isAdjustment
+          ? "adjust"
+          : categoryIcon(txn.category);
   const label =
-    isWithdrawal || isBorrow || isTransfer
+    isWithdrawal || isBorrow || isTransfer || isAdjustment
       ? txn.category
       : isRepayment
         ? `Repaid ${txn.person ?? ""}`.trim()
         : categoryLabel(txn.category);
-  const detail = txn.note || (compact ? "" : formatDate(txn.date));
+  // Adjustments are meaningless without knowing which account they touched.
+  const accountName = isAdjustment
+    ? accounts?.find((a) => a.id === txn.accountId)?.name
+    : undefined;
+  const detail = [
+    accountName,
+    txn.note || (compact ? "" : formatDate(txn.date)),
+  ]
+    .filter(Boolean)
+    .join(" · ");
   return (
     <div className="flex items-center gap-3 py-2.5">
       <button
@@ -59,13 +73,21 @@ const TxnRow = ({ txn, onDelete, compact }: TxnRowProps) => {
               ? "text-primary"
               : isWithdrawal || isBorrow
                 ? "text-amber-600 dark:text-amber-400"
-                : isTransfer
+                : isTransfer || isAdjustment
                   ? "text-muted-foreground"
                   : ""
           }`}
         >
-          {isIncome || isBorrow ? "+" : isTransfer ? "" : "−"}
-          {formatBDT(txn.amount)}
+          {isAdjustment
+            ? txn.amount < 0
+              ? "−"
+              : "+"
+            : isIncome || isBorrow
+              ? "+"
+              : isTransfer
+                ? ""
+                : "−"}
+          {formatBDT(Math.abs(txn.amount))}
         </span>
       </button>
       {onDelete && (

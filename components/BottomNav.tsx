@@ -4,14 +4,15 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Icon, type IconName } from "@/components/Icon";
 import { Button } from "@/components/ui/button";
+import { ROUTES } from "@/lib/routes";
 import { useUIStore } from "@/lib/store";
 
 const NAV = [
-  { href: "/", label: "Home", icon: "home" },
-  { href: "/history", label: "History", icon: "history" },
+  { href: ROUTES.dashboard, label: "Home", icon: "home" },
+  { href: ROUTES.history, label: "History", icon: "history" },
   null, // slot for the add button
-  { href: "/budget", label: "Budget", icon: "budget" },
-  { href: "/accounts", label: "Accounts", icon: "accounts" },
+  { href: ROUTES.budget, label: "Budget", icon: "budget" },
+  { href: ROUTES.accounts, label: "Accounts", icon: "accounts" },
 ] as const satisfies readonly (
   | { href: string; label: string; icon: IconName }
   | null

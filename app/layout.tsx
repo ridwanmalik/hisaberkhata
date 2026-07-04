@@ -1,9 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { SerwistProvider } from "@serwist/turbopack/react";
-import BottomNav from "@/components/BottomNav";
-import EditEntry from "@/components/EditEntry";
-import QuickEntry from "@/components/QuickEntry";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -54,14 +51,7 @@ const RootLayout = ({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full">
-        <SerwistProvider swUrl="/serwist/sw.js">
-          <main className="mx-auto min-h-dvh w-full max-w-md px-4 pb-28 pt-6">
-            {children}
-          </main>
-          <QuickEntry />
-          <EditEntry />
-          <BottomNav />
-        </SerwistProvider>
+        <SerwistProvider swUrl="/serwist/sw.js">{children}</SerwistProvider>
       </body>
     </html>
   );

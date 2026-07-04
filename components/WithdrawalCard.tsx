@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { formatBDT, formatDate } from "@/lib/format";
 import type { Container } from "@/lib/hooks";
+import { ROUTES } from "@/lib/routes";
 
 /** Summary card for a cash container (withdrawal or borrow). */
 const WithdrawalCard = ({ container }: { container: Container }) => {
@@ -16,7 +17,7 @@ const WithdrawalCard = ({ container }: { container: Container }) => {
       ? Math.max(0, Math.min(100, (remainder / txn.amount) * 100))
       : 0;
   return (
-    <Link href={`/withdrawal?id=${txn.id}`} className="block">
+    <Link href={ROUTES.withdrawal(txn.id)} className="block">
       <Card className="gap-0 py-4 transition-colors active:bg-muted/50">
         <CardContent className="px-4">
           <div className="mb-1 flex items-baseline justify-between gap-2">

@@ -22,7 +22,7 @@ import {
   dateTimeInputToTs,
   tsToDateTimeInput,
 } from "@/lib/format";
-import { useTransaction } from "@/lib/hooks";
+import { useAccounts, useTransaction } from "@/lib/hooks";
 import { deleteTransaction, updateTransaction } from "@/lib/repo";
 import { useUIStore } from "@/lib/store";
 import type { Transaction } from "@/lib/types";
@@ -34,6 +34,7 @@ const TITLES: Record<Transaction["type"], string> = {
   borrow: "Edit borrow",
   repayment: "Edit repayment",
   transfer: "Edit transfer",
+  adjustment: "Edit adjustment",
 };
 
 const DELETE_WARNINGS: Record<Transaction["type"], string> = {
@@ -47,13 +48,17 @@ const DELETE_WARNINGS: Record<Transaction["type"], string> = {
     "The money goes back to the account it was paid from, and the debt grows back.",
   transfer:
     "Both sides are reversed — the amount and any fee go back to the source account.",
+  adjustment:
+    "The adjustment is removed and the account balance moves back by the same amount.",
 };
 
 const editSchema = z.object({
+  // Nonzero only — positivity is enforced per type by the repo (adjustments
+  // are the one signed type).
   amount: z
     .string()
     .refine(
-      (v) => Number.isFinite(Number(v)) && Number(v) > 0,
+      (v) => Number.isFinite(Number(v)) && Number(v) !== 0,
       "Enter a valid amount",
     ),
   category: z.string(),
@@ -78,6 +83,8 @@ interface EditFormProps {
 
 const EditEntryForm = ({ txn, onDone }: EditFormProps) => {
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const accounts = useAccounts();
+  const accountName = accounts?.find((a) => a.id === txn.accountId)?.name;
 
   const isCategoryType = txn.type === "expense" || txn.type === "income";
   const isPurposeType = txn.type === "withdrawal" || txn.type === "borrow";
@@ -136,6 +143,11 @@ const EditEntryForm = ({ txn, onDone }: EditFormProps) => {
   return (
     <form onSubmit={form.handleSubmit(onSubmit)}>
       <FieldGroup className="gap-4">
+        {txn.type === "adjustment" && accountName && (
+          <p className="rounded-xl bg-muted px-3 py-2 text-sm text-muted-foreground">
+            {txn.category} · <span className="text-foreground">{accountName}</span>
+          </p>
+        )}
         <Controller
           name="amount"
           control={form.control}
@@ -149,7 +161,13 @@ const EditEntryForm = ({ txn, onDone }: EditFormProps) => {
                   id="edit-amount"
                   aria-invalid={fieldState.invalid}
                   onChange={(e) =>
-                    field.onChange(e.target.value.replace(/[^\d.]/g, ""))
+                    field.onChange(
+                      e.target.value.replace(
+                        // Adjustments are signed — allow a leading minus.
+                        txn.type === "adjustment" ? /[^\d.-]/g : /[^\d.]/g,
+                        "",
+                      ),
+                    )
                   }
                   inputMode="decimal"
                 />

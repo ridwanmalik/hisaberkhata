@@ -6,7 +6,15 @@ export type TransactionType =
   | "withdrawal"
   | "borrow"
   | "repayment"
-  | "transfer";
+  | "transfer"
+  | "adjustment";
+
+/**
+ * Label marking an adjustment as an account's opening balance. Machine-set
+ * (never user-editable), so it doubles as a reliable flag — statements fold
+ * these into the start balance instead of listing them as activity.
+ */
+export const OPENING_BALANCE_LABEL = "Opening balance";
 
 /** Parent types that hold spendable cash and take child expenses. */
 export const CONTAINER_TYPES = ["withdrawal", "borrow"] as const;
@@ -46,6 +54,7 @@ export interface Transaction {
   accountId: string;
   /** Set on child transactions attached to a cash container. */
   parentId: string | null;
+  /** Always positive — except adjustments, which are signed. */
   amount: number;
   type: TransactionType;
   /** For containers this is the purpose label (e.g. "Bazar week 1"). */

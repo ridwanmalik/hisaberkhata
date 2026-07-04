@@ -10,6 +10,10 @@ effects), `lib/hooks.ts` (derived numbers), `lib/types.ts` (shapes).
 - Debit cards (`cards[]`) attach to bank/mfs accounts only — display-only,
   never a money source.
 - Deleting an account deletes every transaction recorded on it.
+- **No silent balance writes.** Opening balances are "Opening balance"
+  adjustment entries (dated at creation); editing a balance records a
+  "Balance adjusted" entry of the delta. Invariant:
+  **balance = Σ(entry effects), always.**
 
 ## Transactions & balance effects
 
@@ -21,6 +25,7 @@ effects), `lib/hooks.ts` (derived numbers), `lib/types.ts` (shapes).
 | `borrow` (parent)     | none — cash came from the lender's pocket (`accountId: ""`) |
 | `repayment`           | −amount on the account it was paid from      |
 | `transfer`            | −(amount + fee) on source, +amount on destination |
+| `adjustment`          | +amount (signed — the only type where amount can be negative) |
 | `expense` (child)     | none — only reduces the container remainder  |
 
 - Amounts are always positive; direction comes from `type`.
@@ -67,9 +72,16 @@ Computed in one place: `summarizeMoney` in `lib/money.ts`.
   + Σ container remainders. Only money that exists.
 - **You owe** = Σ credit dues + Σ outstanding borrows. Shown as a quiet
   corner line, never subtracted from the big number.
-- Monthly Income/Spent/Cash-out exclude borrows and repayments — those get
-  their own "Borrowed X · Repaid Y" line. Debt movement is never income or
-  spending.
+- Monthly Income/Spent/Cash-out exclude borrows, repayments, and
+  adjustments — each gets its own quiet line. Debt movement and balance
+  corrections are never income or spending.
+- **Account statement** (per account, per month): closing = stored balance −
+  Σ(effects after month end); opening = closing − Σ(effects in month).
+  Children excluded, incoming transfers included (`accountEffect` in
+  `lib/money.ts`). "Opening balance" entries fold into the start balance of
+  their own month and never appear as statement activity. "Cash in hand" on
+  the accounts page is virtual — Σ of container remainders, not a real
+  account.
 
 ## Recurring & budgets (Phase 2)
 
