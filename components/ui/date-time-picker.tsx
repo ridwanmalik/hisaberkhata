@@ -286,7 +286,7 @@ export const DateTimePicker = ({
       </button>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="flex max-h-[90vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-72">
+        <DialogContent className="flex max-h-[90vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-80">
           {/* Header */}
           <div className="px-5 pt-5 text-center">
             <DialogTitle className="text-base font-semibold">
@@ -331,6 +331,11 @@ export const DateTimePicker = ({
                   onSelect={selectDate}
                   captionLayout="label"
                   disabled={disabledMatchers}
+                  // Always render 6 weeks so the last row never drops and
+                  // the dialog height doesn't jump between months.
+                  fixedWeeks
+                  showOutsideDays
+                  className="bg-transparent [--cell-size:--spacing(10)]"
                 />
               </div>
             ) : (
@@ -396,24 +401,24 @@ export const DateTimePicker = ({
           </div>
 
           {/* Footer */}
-          <DialogFooter className="flex-row items-center justify-between border-t px-5 py-3 sm:justify-between">
+          <DialogFooter className="flex-row items-center justify-between border-t px-6 pt-4 pb-7 sm:justify-between">
             {dateOnly || activeTab === "date" ? (
-              <button
-                type="button"
+              <Button
+                variant="ghost"
                 onClick={selectToday}
                 disabled={todayDisabled}
-                className="text-sm font-medium text-primary disabled:opacity-40"
+                className="text-primary"
               >
                 Today
-              </button>
+              </Button>
             ) : (
               <span />
             )}
             <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={() => setOpen(false)}>
+              <Button variant="outline" onClick={() => setOpen(false)}>
                 Cancel
               </Button>
-              <Button size="sm" onClick={done} disabled={!selectedDate}>
+              <Button onClick={done} disabled={!selectedDate} className="px-6">
                 Done
               </Button>
             </div>
