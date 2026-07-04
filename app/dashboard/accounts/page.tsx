@@ -166,16 +166,26 @@ const AccountsPage = () => {
         )}
         {(accounts ?? []).map(a => {
           const hasCardFace = a.type === "credit" || (a.cards ?? []).length > 0
+          const creditLimit = a.creditLimit ?? 0
+          const availableCredit = creditLimit - Math.max(0, -a.balance)
           return (
             <Card
               key={a.id}
               onClick={() => openEdit(a)}
               className={`cursor-pointer py-4 transition-colors active:bg-muted/50 ${hasCardFace ? "aspect-[1.71/1]" : ""}`}>
               <CardContent className="flex flex-1 flex-col px-6 py-4">
+                {a.type === "credit" && creditLimit > 0 && (
+                  <div className="ml-auto flex flex-col text-xs text-right">
+                    <span className="text-muted-foreground">Available limit</span>
+                    <span className={`font-semibold tabular-nums ${availableCredit < 0 ? "text-destructive" : ""}`}>
+                      {formatBDT(availableCredit)}{" "}
+                    </span>
+                  </div>
+                )}
                 {hasCardFace && (
                   <div className="flex flex-1 items-end">
                     <p className="mb-8 truncate text-xl font-medium">
-                      <span className="text-muted-foreground">⬤⬤⬤⬤ ⬤⬤⬤⬤ ⬤⬤⬤⬤ </span>
+                      <span className="text-muted-foreground/75">⬤⬤⬤⬤&nbsp;&nbsp;⬤⬤⬤⬤&nbsp;&nbsp;⬤⬤⬤⬤&nbsp;&nbsp;</span>
                       {a.type === "credit" ? a.last4 : a.cards?.[0]?.last4}
                     </p>
                   </div>

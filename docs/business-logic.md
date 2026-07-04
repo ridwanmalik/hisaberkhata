@@ -7,6 +7,7 @@ effects), `lib/hooks.ts` (derived numbers), `lib/types.ts` (shapes).
 
 - Types: `bank`, `mfs` (mobile wallet), `cash`, `credit`.
 - Credit: **negative balance = dues**; `creditLimit` optional.
+  Available credit = creditLimit − dues (negative = over limit).
 - Debit cards (`cards[]`) attach to bank/mfs accounts only — display-only,
   never a money source.
 - Deleting an account deletes every transaction recorded on it.
