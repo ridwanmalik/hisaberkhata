@@ -15,6 +15,10 @@ class HisaberKhataDB extends Dexie {
       recurring_items: "id, type, dayOfMonth",
       budgets: "id, category",
     });
+    // v2: borrow/repayment support — repayments look up their borrow by id.
+    this.version(2).stores({
+      transactions: "id, accountId, parentId, type, date, category, borrowId",
+    });
   }
 }
 

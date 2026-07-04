@@ -18,14 +18,36 @@ const HomePage = () => {
   const now = useMemo(() => new Date(), []);
   const month = useMonthData(now.getFullYear(), now.getMonth());
 
+  // "You have" counts only money that actually exists — credit dues and
+  // borrowed debt live in the quiet "you owe" line instead of dragging the
+  // big number down.
   const accountsTotal = useMemo(
-    () => (accounts ?? []).reduce((sum, a) => sum + a.balance, 0),
+    () =>
+      (accounts ?? []).reduce(
+        (sum, a) =>
+          sum + (a.type === "credit" ? Math.max(0, a.balance) : a.balance),
+        0,
+      ),
+    [accounts],
+  );
+  const creditDues = useMemo(
+    () =>
+      (accounts ?? []).reduce(
+        (sum, a) =>
+          a.type === "credit" ? sum + Math.max(0, -a.balance) : sum,
+        0,
+      ),
     [accounts],
   );
   const cashInHand = useMemo(
     () => (containers ?? []).reduce((sum, c) => sum + c.remainder, 0),
     [containers],
   );
+  const borrowedOwed = useMemo(
+    () => (containers ?? []).reduce((sum, c) => sum + c.owed, 0),
+    [containers],
+  );
+  const youOwe = creditDues + borrowedOwed;
   const openContainers = (containers ?? []).filter((c) => c.remainder > 0);
   const recent = (month?.transactions ?? []).slice(0, 5);
   const loaded = accounts !== undefined;
@@ -41,7 +63,7 @@ const HomePage = () => {
 
       <Card className="border-none bg-primary py-5 text-primary-foreground shadow-lg shadow-primary/20">
         <CardContent className="px-5">
-          <p className="text-sm opacity-80">Total money</p>
+          <p className="text-sm opacity-80">You have</p>
           <p className="mt-1 text-4xl font-bold tabular-nums">
             {formatBDT(accountsTotal + cashInHand)}
           </p>
@@ -49,6 +71,16 @@ const HomePage = () => {
             {formatBDT(accountsTotal)} in accounts · {formatBDT(cashInHand)}{" "}
             unspent cash
           </p>
+          {youOwe > 0 && (
+            <p className="mt-3 flex items-baseline justify-between gap-2 border-t border-primary-foreground/20 pt-2 text-xs opacity-70 tabular-nums">
+              <span>You owe {formatBDT(youOwe)}</span>
+              <span>
+                {creditDues > 0 && `${formatBDT(creditDues)} card dues`}
+                {creditDues > 0 && borrowedOwed > 0 && " · "}
+                {borrowedOwed > 0 && `${formatBDT(borrowedOwed)} borrowed`}
+              </span>
+            </p>
+          )}
         </CardContent>
       </Card>
 
@@ -66,27 +98,40 @@ const HomePage = () => {
         </Card>
       )}
 
-      <section className="grid grid-cols-3 gap-2 text-center">
-        {[
-          {
-            label: "Income",
-            value: month?.income ?? 0,
-            tone: "text-primary",
-          },
-          { label: "Spent", value: month?.spent ?? 0, tone: "" },
-          {
-            label: "Cash out",
-            value: month?.withdrawn ?? 0,
-            tone: "text-amber-600 dark:text-amber-400",
-          },
-        ].map((s) => (
-          <Card key={s.label} className="gap-0 px-2 py-3">
-            <p className="text-xs text-muted-foreground">{s.label}</p>
-            <p className={`mt-0.5 text-sm font-bold tabular-nums ${s.tone}`}>
-              {formatBDT(s.value)}
-            </p>
-          </Card>
-        ))}
+      <section className="space-y-2 text-center">
+        <div className="grid grid-cols-3 gap-2">
+          {[
+            {
+              label: "Income",
+              value: month?.income ?? 0,
+              tone: "text-primary",
+            },
+            { label: "Spent", value: month?.spent ?? 0, tone: "" },
+            {
+              label: "Cash out",
+              value: month?.withdrawn ?? 0,
+              tone: "text-amber-600 dark:text-amber-400",
+            },
+          ].map((s) => (
+            <Card key={s.label} className="gap-0 px-2 py-3">
+              <p className="text-xs text-muted-foreground">{s.label}</p>
+              <p className={`mt-0.5 text-sm font-bold tabular-nums ${s.tone}`}>
+                {formatBDT(s.value)}
+              </p>
+            </Card>
+          ))}
+        </div>
+        {((month?.borrowed ?? 0) > 0 || (month?.repaid ?? 0) > 0) && (
+          <p className="text-xs text-muted-foreground">
+            🤝{" "}
+            {(month?.borrowed ?? 0) > 0 &&
+              `Borrowed ${formatBDT(month?.borrowed ?? 0)}`}
+            {(month?.borrowed ?? 0) > 0 && (month?.repaid ?? 0) > 0 && " · "}
+            {(month?.repaid ?? 0) > 0 &&
+              `Repaid ${formatBDT(month?.repaid ?? 0)}`}{" "}
+            this month
+          </p>
+        )}
       </section>
 
       {openContainers.length > 0 && (

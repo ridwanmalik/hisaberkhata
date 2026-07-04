@@ -11,6 +11,7 @@ import { formatBDT, formatDate, formatMonth } from "@/lib/format";
 import { useContainers, useMonthData } from "@/lib/hooks";
 import { deleteTransaction } from "@/lib/repo";
 import { useUIStore } from "@/lib/store";
+import { isContainerType } from "@/lib/types";
 
 const HistoryPage = () => {
   const { monthOffset, setMonthOffset } = useUIStore();
@@ -37,7 +38,7 @@ const HistoryPage = () => {
 
   const requestDelete = (id: string) => {
     const txn = month?.transactions.find((t) => t.id === id);
-    setPendingDelete({ id, isParent: txn?.type === "withdrawal" });
+    setPendingDelete({ id, isParent: !!txn && isContainerType(txn.type) });
   };
 
   return (
@@ -105,7 +106,7 @@ const HistoryPage = () => {
       ) : (
         <div className="space-y-3">
           {rows.map((t) => {
-            if (t.type !== "withdrawal") {
+            if (!isContainerType(t.type)) {
               return (
                 <Card key={t.id} className="py-0">
                   <CardContent className="px-4">
@@ -115,6 +116,7 @@ const HistoryPage = () => {
               );
             }
             const c = containerById.get(t.id);
+            const isBorrow = t.type === "borrow";
             return (
               <Card key={t.id} className="gap-0 py-4">
                 <CardContent className="px-4">
@@ -122,18 +124,27 @@ const HistoryPage = () => {
                     href={`/withdrawal?id=${t.id}`}
                     className="flex items-baseline justify-between gap-2"
                   >
-                    <p className="truncate font-medium">💵 {t.category}</p>
+                    <p className="truncate font-medium">
+                      {isBorrow ? "🤝" : "💵"} {t.category}
+                    </p>
                     <p className="shrink-0 text-xs text-muted-foreground">
                       {formatDate(t.date)}
                     </p>
                   </Link>
                   <p className="mt-1 text-sm">
                     <span className="font-semibold text-amber-600 dark:text-amber-400">
-                      −{formatBDT(t.amount)}
+                      {isBorrow ? "+" : "−"}
+                      {formatBDT(t.amount)}
                     </span>{" "}
                     <span className="text-primary">
                       · {formatBDT(c?.remainder ?? t.amount)} left
                     </span>
+                    {isBorrow && (c?.owed ?? 0) > 0 && (
+                      <span className="text-muted-foreground">
+                        {" "}
+                        · owes {formatBDT(c?.owed ?? 0)}
+                      </span>
+                    )}
                   </p>
                   {c && c.children.length > 0 && (
                     <div className="mt-1 divide-y border-t pl-3">
@@ -171,10 +182,12 @@ const HistoryPage = () => {
         onOpenChange={(open) => {
           if (!open) setPendingDelete(null);
         }}
-        title={pendingDelete?.isParent ? "Delete withdrawal?" : "Delete entry?"}
+        title={
+          pendingDelete?.isParent ? "Delete this cash entry?" : "Delete entry?"
+        }
         description={
           pendingDelete?.isParent
-            ? "This deletes the withdrawal and everything recorded under it. The amount goes back to the account."
+            ? "This deletes the entry and everything recorded under it, reversing its balance effects."
             : "This entry will be removed and its balance effect reversed."
         }
         onConfirm={async () => {

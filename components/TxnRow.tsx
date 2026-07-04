@@ -16,15 +16,23 @@ interface TxnRowProps {
 const TxnRow = ({ txn, onDelete, compact }: TxnRowProps) => {
   const isIncome = txn.type === "income";
   const isWithdrawal = txn.type === "withdrawal";
+  const isBorrow = txn.type === "borrow";
+  const isRepayment = txn.type === "repayment";
+  const emoji =
+    isWithdrawal ? "💵" : isBorrow || isRepayment ? "🤝" : categoryEmoji(txn.category);
+  const label =
+    isWithdrawal || isBorrow
+      ? txn.category
+      : isRepayment
+        ? `Repaid ${txn.person ?? ""}`.trim()
+        : categoryLabel(txn.category);
   return (
     <div className="flex items-center gap-3 py-2.5">
       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-lg">
-        {isWithdrawal ? "💵" : categoryEmoji(txn.category)}
+        {emoji}
       </span>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium">
-          {isWithdrawal ? txn.category : categoryLabel(txn.category)}
-        </p>
+        <p className="truncate text-sm font-medium">{label}</p>
         <p className="truncate text-xs text-muted-foreground">
           {txn.note || (compact ? "" : formatDate(txn.date))}
         </p>
@@ -33,12 +41,12 @@ const TxnRow = ({ txn, onDelete, compact }: TxnRowProps) => {
         className={`text-sm font-semibold tabular-nums ${
           isIncome
             ? "text-primary"
-            : isWithdrawal
+            : isWithdrawal || isBorrow
               ? "text-amber-600 dark:text-amber-400"
               : ""
         }`}
       >
-        {isIncome ? "+" : "−"}
+        {isIncome || isBorrow ? "+" : "−"}
         {formatBDT(txn.amount)}
       </span>
       {onDelete && (

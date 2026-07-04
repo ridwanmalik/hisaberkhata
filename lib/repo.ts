@@ -1,10 +1,11 @@
 import { db } from "./db";
-import type {
-  Account,
-  AccountType,
-  RecurringItem,
-  RecurringType,
-  Transaction,
+import {
+  isContainerType,
+  type Account,
+  type AccountType,
+  type RecurringItem,
+  type RecurringType,
+  type Transaction,
 } from "./types";
 
 /**
@@ -31,11 +32,17 @@ const newId = (): string => {
 // - expense (no parent):   -amount on the account
 // - withdrawal (parent):   -amount on the account; the cash lives in the
 //                          container from then on
+// - borrow (parent):       no balance effect — the cash came from someone
+//                          else's pocket straight into the container. The
+//                          debt owed is tracked separately via repayments.
+// - repayment:             -amount on the account it was paid from; reduces
+//                          the borrow's outstanding debt, never its cash
 // - expense (child):       no balance effect — the money already left the
-//                          account when the withdrawal happened. Children only
-//                          reduce the container's remainder.
+//                          account (or the lender's pocket) when the container
+//                          was created. Children only reduce the remainder.
 //
-// Invariant: sum(children) <= parent.amount.
+// Invariants: sum(children) <= parent.amount
+//             sum(repayments) <= borrow.amount
 // ---------------------------------------------------------------------------
 
 export const childrenSum = async (parentId: string): Promise<number> => {
@@ -48,6 +55,14 @@ export const childrenSum = async (parentId: string): Promise<number> => {
 
 export const remainderOf = async (parent: Transaction): Promise<number> =>
   parent.amount - (await childrenSum(parent.id));
+
+export const repaidSum = async (borrowId: string): Promise<number> => {
+  const repayments = await db.transactions
+    .where("borrowId")
+    .equals(borrowId)
+    .toArray();
+  return repayments.reduce((sum, t) => sum + t.amount, 0);
+};
 
 // -- Accounts ---------------------------------------------------------------
 
@@ -198,7 +213,83 @@ export const addWithdrawal = async (input: EntryInput): Promise<string> => {
   return id;
 };
 
-/** Attaches a spend to a withdrawal container. Never touches account balances. */
+interface BorrowInput {
+  /** Who lent the money. */
+  person: string;
+  amount: number;
+  /** Purpose label, like a withdrawal's. */
+  category: string;
+  note?: string;
+  date?: number;
+}
+
+/**
+ * Records cash borrowed from a person as a parent container. No account
+ * balance changes — the cash arrives in hand, not in an account. The debt
+ * stays outstanding until repayments against it add up to the amount.
+ */
+export const addBorrow = async (input: BorrowInput): Promise<string> => {
+  assertPositive(input.amount);
+  if (!input.person.trim()) throw new Error("Say who lent the money");
+  const id = newId();
+  await db.transactions.add({
+    id,
+    accountId: "",
+    parentId: null,
+    amount: input.amount,
+    type: "borrow",
+    category: input.category,
+    note: input.note ?? "",
+    date: input.date ?? Date.now(),
+    person: input.person.trim(),
+  });
+  return id;
+};
+
+interface RepaymentInput {
+  borrowId: string;
+  /** The account the repayment is paid from. */
+  accountId: string;
+  amount: number;
+  note?: string;
+  date?: number;
+}
+
+/** Pays back part (or all) of a borrow from an account. */
+export const addRepayment = async (input: RepaymentInput): Promise<string> => {
+  assertPositive(input.amount);
+  const id = newId();
+  await db.transaction("rw", [db.accounts, db.transactions], async () => {
+    const borrow = await db.transactions.get(input.borrowId);
+    if (!borrow || borrow.type !== "borrow") {
+      throw new Error("Borrow entry not found");
+    }
+    const repaid = await repaidSum(borrow.id);
+    if (repaid + input.amount > borrow.amount) {
+      throw new Error("That's more than what is still owed");
+    }
+    const account = await db.accounts.get(input.accountId);
+    if (!account) throw new Error("Account not found");
+    await db.transactions.add({
+      id,
+      accountId: input.accountId,
+      parentId: null,
+      amount: input.amount,
+      type: "repayment",
+      category: "repayment",
+      note: input.note ?? "",
+      date: input.date ?? Date.now(),
+      person: borrow.person,
+      borrowId: borrow.id,
+    });
+    await db.accounts.update(account.id, {
+      balance: account.balance - input.amount,
+    });
+  });
+  return id;
+};
+
+/** Attaches a spend to a cash container. Never touches account balances. */
 export const addChildExpense = async (
   parentId: string,
   input: Omit<EntryInput, "accountId">,
@@ -207,12 +298,12 @@ export const addChildExpense = async (
   const id = newId();
   await db.transaction("rw", [db.transactions], async () => {
     const parent = await db.transactions.get(parentId);
-    if (!parent || parent.type !== "withdrawal") {
-      throw new Error("Withdrawal not found");
+    if (!parent || !isContainerType(parent.type)) {
+      throw new Error("Cash entry not found");
     }
     const spent = await childrenSum(parentId);
     if (spent + input.amount > parent.amount) {
-      throw new Error("Amount is more than what is left in this withdrawal");
+      throw new Error("Amount is more than what is left of this cash");
     }
     await db.transactions.add({
       id,
@@ -254,14 +345,32 @@ export const updateTransaction = async (
           }
         }
       } else {
-        if (txn.type === "withdrawal") {
+        if (isContainerType(txn.type)) {
           const spent = await childrenSum(txn.id);
           if (nextAmount < spent) {
             throw new Error(
-              "Withdrawal cannot be smaller than what was already spent from it",
+              "Cannot be smaller than what was already spent from it",
             );
           }
         }
+        if (txn.type === "borrow") {
+          const repaid = await repaidSum(txn.id);
+          if (nextAmount < repaid) {
+            throw new Error(
+              "Cannot be smaller than what was already repaid on it",
+            );
+          }
+        }
+        if (txn.type === "repayment" && txn.borrowId) {
+          const borrow = await db.transactions.get(txn.borrowId);
+          if (borrow) {
+            const repaid = await repaidSum(borrow.id);
+            if (repaid + delta > borrow.amount) {
+              throw new Error("That's more than what is still owed");
+            }
+          }
+        }
+        // Borrows have accountId "" — the lookup misses and no balance moves.
         const account = await db.accounts.get(txn.accountId);
         if (account) {
           const sign = txn.type === "income" ? 1 : -1;
@@ -276,15 +385,32 @@ export const updateTransaction = async (
 };
 
 /**
- * Deletes a transaction, reversing its balance effect. Deleting a withdrawal
- * also deletes its children (they never affected any balance).
+ * Deletes a transaction, reversing its balance effect. Deleting a container
+ * also deletes its children (they never affected any balance). Deleting a
+ * borrow also deletes its repayments, returning each to the account it was
+ * paid from.
  */
 export const deleteTransaction = async (id: string): Promise<void> => {
   await db.transaction("rw", [db.accounts, db.transactions], async () => {
     const txn = await db.transactions.get(id);
     if (!txn) return;
-    if (txn.type === "withdrawal") {
+    if (isContainerType(txn.type)) {
       await db.transactions.where("parentId").equals(id).delete();
+    }
+    if (txn.type === "borrow") {
+      const repayments = await db.transactions
+        .where("borrowId")
+        .equals(id)
+        .toArray();
+      for (const r of repayments) {
+        const account = await db.accounts.get(r.accountId);
+        if (account) {
+          await db.accounts.update(account.id, {
+            balance: account.balance + r.amount,
+          });
+        }
+      }
+      await db.transactions.where("borrowId").equals(id).delete();
     }
     if (!txn.parentId) {
       const account = await db.accounts.get(txn.accountId);

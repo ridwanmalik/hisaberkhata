@@ -6,9 +6,10 @@ import { Progress } from "@/components/ui/progress";
 import { formatBDT, formatDate } from "@/lib/format";
 import type { Container } from "@/lib/hooks";
 
-/** Summary card for a withdrawal container, remainder front and center. */
+/** Summary card for a cash container (withdrawal or borrow). */
 const WithdrawalCard = ({ container }: { container: Container }) => {
-  const { txn, spent, remainder } = container;
+  const { txn, spent, remainder, owed } = container;
+  const isBorrow = txn.type === "borrow";
   const pctLeft =
     txn.amount > 0
       ? Math.max(0, Math.min(100, (remainder / txn.amount) * 100))
@@ -18,7 +19,9 @@ const WithdrawalCard = ({ container }: { container: Container }) => {
       <Card className="gap-0 py-4 transition-colors active:bg-muted/50">
         <CardContent className="px-4">
           <div className="mb-1 flex items-baseline justify-between gap-2">
-            <p className="truncate text-sm font-medium">💵 {txn.category}</p>
+            <p className="truncate text-sm font-medium">
+              {isBorrow ? "🤝" : "💵"} {txn.category}
+            </p>
             <p className="shrink-0 text-xs text-muted-foreground">
               {formatDate(txn.date)}
             </p>
@@ -34,6 +37,13 @@ const WithdrawalCard = ({ container }: { container: Container }) => {
             <p className="mt-1.5 text-xs text-muted-foreground">
               {formatBDT(spent)} accounted · {container.children.length}{" "}
               {container.children.length === 1 ? "entry" : "entries"}
+            </p>
+          )}
+          {isBorrow && (
+            <p className="mt-1.5 text-xs text-muted-foreground">
+              {owed > 0
+                ? `${formatBDT(owed)} still owed to ${txn.person}`
+                : `Repaid to ${txn.person} in full 🎉`}
             </p>
           )}
         </CardContent>

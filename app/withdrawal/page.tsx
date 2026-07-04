@@ -1,23 +1,123 @@
 "use client";
 
+import { zodResolver } from "@hookform/resolvers/zod";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
+import { Controller, useForm } from "react-hook-form";
+import * as z from "zod";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import { Icon } from "@/components/Icon";
 import TxnRow from "@/components/TxnRow";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Field, FieldError } from "@/components/ui/field";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+} from "@/components/ui/input-group";
 import { Progress } from "@/components/ui/progress";
-import { formatBDT, formatDate } from "@/lib/format";
+import { CURRENCY_SYMBOL, formatBDT, formatDate } from "@/lib/format";
 import { useAccounts, useContainer } from "@/lib/hooks";
-import { deleteTransaction } from "@/lib/repo";
+import { addRepayment, deleteTransaction } from "@/lib/repo";
 import { useUIStore } from "@/lib/store";
+import type { Account } from "@/lib/types";
 
 type PendingDelete =
   | { kind: "child"; id: string }
+  | { kind: "repayment"; id: string }
   | { kind: "parent" }
   | null;
+
+const repaySchema = z.object({
+  amount: z
+    .string()
+    .refine(
+      (v) => Number.isFinite(Number(v)) && Number(v) > 0,
+      "Enter an amount first",
+    ),
+});
+
+type RepayFormValues = z.infer<typeof repaySchema>;
+
+interface RepayFormProps {
+  borrowId: string;
+  accounts: Account[];
+}
+
+const RepayForm = ({ borrowId, accounts }: RepayFormProps) => {
+  const [accountId, setAccountId] = useState(accounts[0]?.id ?? "");
+  const form = useForm<RepayFormValues>({
+    resolver: zodResolver(repaySchema),
+    defaultValues: { amount: "" },
+  });
+
+  const onSubmit = async (values: RepayFormValues) => {
+    try {
+      if (!accountId) throw new Error("Add an account first");
+      await addRepayment({
+        borrowId,
+        accountId,
+        amount: Number(values.amount),
+      });
+      form.reset();
+    } catch (e) {
+      form.setError("root", {
+        message: e instanceof Error ? e.message : "Could not save",
+      });
+    }
+  };
+
+  return (
+    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-2">
+      <div className="flex gap-2 overflow-x-auto pb-1">
+        {accounts.map((a) => (
+          <Button
+            key={a.id}
+            type="button"
+            variant={accountId === a.id ? "default" : "outline"}
+            size="sm"
+            onClick={() => setAccountId(a.id)}
+            className="shrink-0 rounded-full"
+          >
+            {a.name}
+          </Button>
+        ))}
+      </div>
+      <div className="flex gap-2">
+        <Controller
+          name="amount"
+          control={form.control}
+          render={({ field, fieldState }) => (
+            <Field data-invalid={fieldState.invalid} className="flex-1 gap-1">
+              <InputGroup className="h-10">
+                <InputGroupAddon>{CURRENCY_SYMBOL}</InputGroupAddon>
+                <InputGroupInput
+                  {...field}
+                  aria-invalid={fieldState.invalid}
+                  onChange={(e) =>
+                    field.onChange(e.target.value.replace(/[^\d.]/g, ""))
+                  }
+                  inputMode="decimal"
+                  placeholder="Amount repaid"
+                  aria-label="Repayment amount"
+                />
+              </InputGroup>
+              {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+            </Field>
+          )}
+        />
+        <Button type="submit" className="h-10">
+          Repay
+        </Button>
+      </div>
+      {form.formState.errors.root && (
+        <FieldError errors={[form.formState.errors.root]} />
+      )}
+    </form>
+  );
+};
 
 const WithdrawalDetail = () => {
   const id = useSearchParams().get("id");
@@ -31,7 +131,7 @@ const WithdrawalDetail = () => {
   if (container === null) {
     return (
       <div className="py-16 text-center text-sm text-muted-foreground">
-        <p>This withdrawal doesn&apos;t exist (it may have been deleted).</p>
+        <p>This entry doesn&apos;t exist (it may have been deleted).</p>
         <Button variant="link" asChild>
           <Link href="/history">Back to history</Link>
         </Button>
@@ -39,7 +139,9 @@ const WithdrawalDetail = () => {
     );
   }
 
-  const { txn, spent, remainder, children } = container;
+  const { txn, spent, remainder, children, repayments, repaid, owed } =
+    container;
+  const isBorrow = txn.type === "borrow";
   const account = accounts?.find((a) => a.id === txn.accountId);
   const pctLeft =
     txn.amount > 0
@@ -59,10 +161,16 @@ const WithdrawalDetail = () => {
           <Icon name="back" />
         </Button>
         <div className="min-w-0">
-          <h1 className="truncate font-bold">💵 {txn.category}</h1>
+          <h1 className="truncate font-bold">
+            {isBorrow ? "🤝" : "💵"} {txn.category}
+          </h1>
           <p className="text-xs text-muted-foreground">
             {formatDate(txn.date)}
-            {account ? ` · from ${account.name}` : ""}
+            {isBorrow
+              ? ` · lent by ${txn.person}`
+              : account
+                ? ` · from ${account.name}`
+                : ""}
           </p>
         </div>
       </header>
@@ -88,6 +196,40 @@ const WithdrawalDetail = () => {
           </Button>
         </CardContent>
       </Card>
+
+      {isBorrow && (
+        <Card className="gap-0 py-4">
+          <CardContent className="space-y-3 px-4">
+            <div className="flex items-baseline justify-between gap-2">
+              <h2 className="font-semibold">Owed to {txn.person}</h2>
+              <p className="text-sm font-bold tabular-nums">
+                {owed > 0 ? formatBDT(owed) : "Settled 🎉"}
+              </p>
+            </div>
+            {repaid > 0 && (
+              <p className="text-xs text-muted-foreground">
+                {formatBDT(repaid)} repaid of {formatBDT(txn.amount)}
+              </p>
+            )}
+            {owed > 0 && (
+              <RepayForm borrowId={txn.id} accounts={accounts ?? []} />
+            )}
+            {repayments.length > 0 && (
+              <div className="divide-y border-t">
+                {repayments.map((r) => (
+                  <TxnRow
+                    key={r.id}
+                    txn={r}
+                    onDelete={(rid) =>
+                      setPendingDelete({ kind: "repayment", id: rid })
+                    }
+                  />
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       <section>
         <h2 className="mb-1 font-semibold">Spends from this cash</h2>
@@ -120,7 +262,7 @@ const WithdrawalDetail = () => {
         onClick={() => setPendingDelete({ kind: "parent" })}
         className="w-full"
       >
-        Delete withdrawal
+        {isBorrow ? "Delete borrow" : "Delete withdrawal"}
       </Button>
 
       <ConfirmDialog
@@ -130,16 +272,27 @@ const WithdrawalDetail = () => {
         }}
         title={
           pendingDelete?.kind === "parent"
-            ? "Delete withdrawal?"
-            : "Delete this spend?"
+            ? isBorrow
+              ? "Delete borrow?"
+              : "Delete withdrawal?"
+            : pendingDelete?.kind === "repayment"
+              ? "Delete this repayment?"
+              : "Delete this spend?"
         }
         description={
           pendingDelete?.kind === "parent"
-            ? "This deletes the withdrawal and everything recorded under it. The amount goes back to the account."
-            : "The money goes back to this withdrawal's remainder."
+            ? isBorrow
+              ? "This deletes the borrow, its spends, and its repayments. Repaid amounts go back to the accounts they were paid from."
+              : "This deletes the withdrawal and everything recorded under it. The amount goes back to the account."
+            : pendingDelete?.kind === "repayment"
+              ? "The money goes back to the account it was paid from, and the debt grows back."
+              : "The money goes back to this cash's remainder."
         }
         onConfirm={async () => {
-          if (pendingDelete?.kind === "child") {
+          if (
+            pendingDelete?.kind === "child" ||
+            pendingDelete?.kind === "repayment"
+          ) {
             await deleteTransaction(pendingDelete.id);
           } else if (pendingDelete?.kind === "parent") {
             await deleteTransaction(txn.id);

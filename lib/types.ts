@@ -1,6 +1,19 @@
 export type AccountType = "bank" | "mfs" | "cash" | "credit";
 
-export type TransactionType = "income" | "expense" | "withdrawal";
+export type TransactionType =
+  | "income"
+  | "expense"
+  | "withdrawal"
+  | "borrow"
+  | "repayment";
+
+/** Parent types that hold spendable cash and take child expenses. */
+export const CONTAINER_TYPES = ["withdrawal", "borrow"] as const;
+
+export const isContainerType = (
+  type: TransactionType,
+): type is "withdrawal" | "borrow" =>
+  (CONTAINER_TYPES as readonly TransactionType[]).includes(type);
 
 /** A debit card linked to a bank/MFS account. Not a money source itself. */
 export interface LinkedCard {
@@ -28,16 +41,21 @@ export interface Account {
 
 export interface Transaction {
   id: string;
+  /** Empty string on borrows — the cash never touched one of our accounts. */
   accountId: string;
-  /** Set on child transactions attached to a withdrawal container. */
+  /** Set on child transactions attached to a cash container. */
   parentId: string | null;
   amount: number;
   type: TransactionType;
-  /** For withdrawals this is the purpose label (e.g. "Bazar week 1"). */
+  /** For containers this is the purpose label (e.g. "Bazar week 1"). */
   category: string;
   note: string;
   /** Epoch milliseconds. */
   date: number;
+  /** Borrows and their repayments: who the money is owed to. */
+  person?: string;
+  /** Repayments: the borrow transaction this settles. */
+  borrowId?: string;
 }
 
 export type RecurringType = "bill" | "income";

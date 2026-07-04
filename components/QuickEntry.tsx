@@ -17,6 +17,7 @@ import {
 } from "@/lib/format";
 import { useAccounts, useContainers } from "@/lib/hooks";
 import {
+  addBorrow,
   addChildExpense,
   addExpense,
   addIncome,
@@ -30,6 +31,7 @@ const TABS: { value: TransactionType; label: string }[] = [
   { value: "expense", label: "Expense" },
   { value: "income", label: "Income" },
   { value: "withdrawal", label: "Cash out" },
+  { value: "borrow", label: "Borrow" },
 ];
 
 const LAST_ACCOUNT_KEY = "hisaberkhata:lastAccountId";
@@ -60,6 +62,8 @@ const entrySchema = z.object({
       "Enter an amount first",
     ),
   purpose: z.string(),
+  /** Borrow only: who lent the money. Required there, checked on save. */
+  person: z.string(),
   note: z.string(),
   date: z.string().min(1, "Pick a date"),
 });
@@ -108,6 +112,7 @@ const QuickEntryForm = ({ initialType, lockedParentId, onDone }: FormProps) => {
     defaultValues: {
       amount: "",
       purpose: "",
+      person: "",
       note: "",
       date: today,
     },
@@ -132,7 +137,9 @@ const QuickEntryForm = ({ initialType, lockedParentId, onDone }: FormProps) => {
         note: values.note,
         date: dateInputToTs(values.date),
       };
-      if (type === "expense" && sourceParentId) {
+      if (type === "borrow") {
+        await addBorrow({ ...common, person: values.person });
+      } else if (type === "expense" && sourceParentId) {
         await addChildExpense(sourceParentId, common);
       } else {
         if (!accountId) throw new Error("Add an account first");
@@ -155,8 +162,20 @@ const QuickEntryForm = ({ initialType, lockedParentId, onDone }: FormProps) => {
     form.handleSubmit((values) => save(values, category))();
 
   const onSubmit = (values: EntryFormValues) => {
-    if (type !== "withdrawal") return; // expense/income save via category tap
-    return save(values, values.purpose.trim() || "Cash out");
+    // expense/income save via category tap instead
+    if (type === "withdrawal") {
+      return save(values, values.purpose.trim() || "Cash out");
+    }
+    if (type === "borrow") {
+      if (!values.person.trim()) {
+        form.setError("person", { message: "Who lent you the money?" });
+        return;
+      }
+      return save(
+        values,
+        values.purpose.trim() || `From ${values.person.trim()}`,
+      );
+    }
   };
 
   const categories = type === "income" ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
@@ -175,7 +194,7 @@ const QuickEntryForm = ({ initialType, lockedParentId, onDone }: FormProps) => {
           }}
           className="mb-4"
         >
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
             {TABS.map((tab) => (
               <TabsTrigger key={tab.value} value={tab.value}>
                 {tab.label}
@@ -230,7 +249,8 @@ const QuickEntryForm = ({ initialType, lockedParentId, onDone }: FormProps) => {
                 active={sourceParentId === c.txn.id}
                 onClick={() => setSourceParentId(c.txn.id)}
               >
-                💵 {c.txn.category} · {formatBDT(c.remainder)} left
+                {c.txn.type === "borrow" ? "🤝" : "💵"} {c.txn.category} ·{" "}
+                {formatBDT(c.remainder)} left
               </Chip>
             ))}
           </div>
@@ -239,12 +259,13 @@ const QuickEntryForm = ({ initialType, lockedParentId, onDone }: FormProps) => {
 
       {lockedParentId && selectedContainer && (
         <p className="mb-4 rounded-xl bg-primary/10 px-3 py-2 text-sm text-primary">
-          💵 {selectedContainer.txn.category} —{" "}
+          {selectedContainer.txn.type === "borrow" ? "🤝" : "💵"}{" "}
+          {selectedContainer.txn.category} —{" "}
           {formatBDT(selectedContainer.remainder)} left
         </p>
       )}
 
-      {(type !== "expense" || !sourceParentId) && (
+      {type !== "borrow" && (type !== "expense" || !sourceParentId) && (
         <div className="mb-4">
           <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
             {type === "withdrawal" ? "Cash out from" : "Account"}
@@ -268,8 +289,28 @@ const QuickEntryForm = ({ initialType, lockedParentId, onDone }: FormProps) => {
         </div>
       )}
 
-      {type === "withdrawal" ? (
+      {type === "withdrawal" || type === "borrow" ? (
         <div className="space-y-3">
+          {type === "borrow" && (
+            <Controller
+              name="person"
+              control={form.control}
+              render={({ field, fieldState }) => (
+                <Field data-invalid={fieldState.invalid}>
+                  <Input
+                    {...field}
+                    aria-invalid={fieldState.invalid}
+                    placeholder="From whom? (e.g. Rahim bhai)"
+                    autoComplete="off"
+                    className="h-10"
+                  />
+                  {fieldState.invalid && (
+                    <FieldError errors={[fieldState.error]} />
+                  )}
+                </Field>
+              )}
+            />
+          )}
           <Controller
             name="purpose"
             control={form.control}
@@ -277,7 +318,11 @@ const QuickEntryForm = ({ initialType, lockedParentId, onDone }: FormProps) => {
               <Field>
                 <Input
                   {...field}
-                  placeholder="Purpose (e.g. Bazar, Eid shopping)"
+                  placeholder={
+                    type === "borrow"
+                      ? "Purpose (optional)"
+                      : "Purpose (e.g. Bazar, Eid shopping)"
+                  }
                   autoComplete="off"
                   className="h-10"
                 />
@@ -288,7 +333,7 @@ const QuickEntryForm = ({ initialType, lockedParentId, onDone }: FormProps) => {
             type="submit"
             className="h-12 w-full text-base font-semibold"
           >
-            Record cash out
+            {type === "borrow" ? "Record borrowed cash" : "Record cash out"}
           </Button>
         </div>
       ) : (

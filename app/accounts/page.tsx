@@ -3,13 +3,11 @@
 import ConfirmDialog from "@/components/ConfirmDialog"
 import { Icon, type IconName } from "@/components/Icon"
 import Sheet from "@/components/Sheet"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group"
-import { Progress } from "@/components/ui/progress"
 import { CURRENCY_SYMBOL, formatBDT } from "@/lib/format"
 import { useAccounts } from "@/lib/hooks"
 import { addAccount, addLinkedCard, deleteAccount, removeLinkedCard, updateAccount } from "@/lib/repo"
@@ -21,7 +19,7 @@ import * as z from "zod"
 
 const TYPE_META: Record<AccountType, { label: string; icon: IconName }> = {
   bank: { label: "Bank", icon: "bank" },
-  mfs: { label: "bKash / Nagad", icon: "mfs" },
+  mfs: { label: "Mobile wallet", icon: "mfs" },
   cash: { label: "Cash in hand", icon: "cash" },
   credit: { label: "Credit card", icon: "card" },
 }
@@ -143,60 +141,50 @@ const AccountsPage = () => {
 
       {accounts?.length === 0 && (
         <p className="py-10 text-center text-sm text-muted-foreground">
-          No accounts yet. Add your bank, bKash/Nagad, credit card, or a cash-in-hand account to get started.
+          No accounts yet. Add your bank, mobile wallet, credit card, or a cash-in-hand account to get started.
         </p>
       )}
 
       <div className="space-y-2">
-        {(accounts ?? []).map(a => (
-          <Card
-            key={a.id}
-            onClick={() => openEdit(a)}
-            className="cursor-pointer py-4 transition-colors active:bg-muted/50">
-            <CardContent className="flex items-center gap-3 px-4">
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
-                <Icon name={TYPE_META[a.type].icon} className="size-5" />
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="truncate font-medium">{a.name}</p>
-                <p className="text-xs text-muted-foreground">
-                  {TYPE_META[a.type].label}
-                  {a.type === "credit" && a.last4 && ` ••${a.last4}`}
-                </p>
-                {a.type === "credit" && (a.creditLimit ?? 0) > 0 && (
-                  <div className="mt-1.5 max-w-40">
-                    <Progress
-                      value={Math.min(100, (Math.max(0, -a.balance) / (a.creditLimit as number)) * 100)}
-                      className={`h-1 ${
-                        -a.balance >= (a.creditLimit as number)
-                          ? "**:data-[slot=progress-indicator]:bg-destructive"
-                          : "**:data-[slot=progress-indicator]:bg-amber-500"
-                      }`}
-                    />
-                    <p className="mt-0.5 text-[11px] text-muted-foreground">
-                      {formatBDT(Math.max(0, -a.balance))} of {formatBDT(a.creditLimit as number)} limit used
+        {(accounts ?? []).map(a => {
+          const hasCardFace = a.type === "credit" || (a.cards ?? []).length > 0
+          return (
+            <Card
+              key={a.id}
+              onClick={() => openEdit(a)}
+              className={`cursor-pointer py-4 transition-colors active:bg-muted/50 ${hasCardFace ? "aspect-[1.7/1]" : ""}`}>
+              <CardContent className="flex flex-1 flex-col px-6 py-4">
+                {hasCardFace && (
+                  <div className="flex flex-1 items-end">
+                    <p className="mb-8 truncate text-xl font-medium">
+                      <span className="text-muted-foreground">⬤⬤⬤⬤ ⬤⬤⬤⬤ ⬤⬤⬤⬤ </span>
+                      {a.type === "credit" ? a.last4 : a.cards?.[0]?.last4}
                     </p>
                   </div>
                 )}
-                {(a.cards ?? []).length > 0 && (
-                  <div className="mt-1.5 flex flex-wrap gap-1">
-                    {(a.cards ?? []).map(c => (
-                      <Badge key={c.id} variant="secondary" className="gap-1">
-                        <Icon name="card" className="size-3" />
-                        {c.label}
-                        {c.last4 && <span className="text-muted-foreground">••{c.last4}</span>}
-                      </Badge>
-                    ))}
+                <div className="flex gap-10">
+                  <div className="min-w-0">
+                    <p className="text-muted-foreground">{TYPE_META[a.type].label}</p>
+                    <p className="truncate font-medium">{a.name}</p>
                   </div>
-                )}
-              </div>
-              <p className={`font-bold tabular-nums ${a.type === "credit" && a.balance < 0 ? "text-destructive" : ""}`}>
-                {formatBDT(a.balance)}
-                {a.type === "credit" && a.balance < 0 && <span className="ml-1 text-xs font-normal">due</span>}
-              </p>
-            </CardContent>
-          </Card>
-        ))}
+                  <div>
+                    <p className="text-muted-foreground">Balance</p>
+                    <p
+                      className={`font-bold tabular-nums ${a.type === "credit" && a.balance < 0 ? "text-destructive" : ""}`}>
+                      {formatBDT(a.balance)}
+                      {a.type === "credit" && a.balance < 0 && <span className="ml-1 text-xs font-normal">due</span>}
+                    </p>
+                  </div>
+                  <div className="ml-auto">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                      <Icon name={TYPE_META[a.type].icon} className="size-5" />
+                    </span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )
+        })}
       </div>
 
       <Sheet open={sheetOpen} onClose={() => setSheetOpen(false)} title={editing ? "Edit account" : "New account"}>
