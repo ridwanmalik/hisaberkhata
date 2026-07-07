@@ -7,4 +7,5 @@ export const ROUTES = {
   accounts: "/dashboard/accounts",
   accountStatement: (id: string) => `/dashboard/accounts/statement?id=${id}`,
   withdrawal: (id: string) => `/dashboard/withdrawal?id=${id}`,
+  settings: "/dashboard/settings",
 } as const;

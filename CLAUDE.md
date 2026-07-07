@@ -14,6 +14,8 @@ only. Full concept, data model, phases, and UX principles: `docs/project-plan.md
   derived numbers. **Any change to business rules (transaction types, balance
   effects, fees, invariants, dashboard/budget math) MUST update this doc in
   the same change.** Keep it very concise — rules, not prose.
+- `docs/sync-plan.md` — the agreed Phase 3 auth/sync architecture and step
+  order. Follow it when building settings/backup/auth/sync.
 
 ## Code Style
 

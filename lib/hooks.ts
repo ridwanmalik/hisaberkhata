@@ -195,3 +195,10 @@ export const useRecurringItems = () =>
   );
 
 export const useBudgets = () => useLiveQuery(() => db.budgets.toArray(), []);
+
+/** Row counts for the settings page — just enough to sanity-check a backup. */
+export const useDataSummary = () =>
+  useLiveQuery(async () => ({
+    accounts: await db.accounts.count(),
+    transactions: await db.transactions.count(),
+  }), []);

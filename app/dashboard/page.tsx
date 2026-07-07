@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo } from "react";
 import { Icon } from "@/components/Icon";
+import { buttonVariants } from "@/components/ui/button";
 import TxnRow from "@/components/TxnRow";
 import WithdrawalCard from "@/components/WithdrawalCard";
 import { Button } from "@/components/ui/button";
@@ -29,11 +30,20 @@ const HomePage = () => {
 
   return (
     <div className="space-y-6">
-      <header>
-        <h1 className="text-xl font-bold">Hisaber Khata</h1>
-        <p className="text-sm text-muted-foreground">
-          {formatMonth(now.getFullYear(), now.getMonth())}
-        </p>
+      <header className="flex items-start justify-between">
+        <div>
+          <h1 className="text-xl font-bold">Hisaber Khata</h1>
+          <p className="text-sm text-muted-foreground">
+            {formatMonth(now.getFullYear(), now.getMonth())}
+          </p>
+        </div>
+        <Link
+          href={ROUTES.settings}
+          aria-label="Settings"
+          className={buttonVariants({ variant: "secondary", size: "icon", className: "rounded-full" })}
+        >
+          <Icon name="settings" />
+        </Link>
       </header>
 
       <Card className="border-none bg-primary py-5 text-primary-foreground shadow-lg shadow-primary/20">
