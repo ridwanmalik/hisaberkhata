@@ -3,7 +3,7 @@
 import { Icon, type IconName } from "@/components/Icon";
 import { Button } from "@/components/ui/button";
 import { categoryIcon, categoryLabel } from "@/lib/categories";
-import { formatBDT, formatDate } from "@/lib/format";
+import { formatBDT, formatDateTime } from "@/lib/format";
 import { useAccounts } from "@/lib/hooks";
 import { useUIStore } from "@/lib/store";
 import type { Transaction } from "@/lib/types";
@@ -45,7 +45,7 @@ const TxnRow = ({ txn, onDelete, compact }: TxnRowProps) => {
     : undefined;
   const detail = [
     accountName,
-    txn.note || (compact ? "" : formatDate(txn.date)),
+    txn.note || (compact ? "" : formatDateTime(txn.date)),
   ]
     .filter(Boolean)
     .join(" · ");

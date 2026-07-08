@@ -18,7 +18,7 @@ import {
   InputGroupInput,
 } from "@/components/ui/input-group";
 import { Progress } from "@/components/ui/progress";
-import { CURRENCY_SYMBOL, formatBDT, formatDate } from "@/lib/format";
+import { CURRENCY_SYMBOL, formatBDT, formatDateTime } from "@/lib/format";
 import {
   useAccounts,
   useContainer,
@@ -200,7 +200,7 @@ const WithdrawalDetail = () => {
             <span className="truncate">{txn.category}</span>
           </h1>
           <p className="text-xs text-muted-foreground">
-            {formatDate(txn.date)}
+            {formatDateTime(txn.date)}
             {isBorrow
               ? ` · lent by ${txn.person}${
                   isAccountBorrow && account ? ` · into ${account.name}` : ""

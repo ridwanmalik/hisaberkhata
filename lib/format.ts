@@ -26,6 +26,17 @@ export const formatDate = (ts: number): string => {
   })
 }
 
+export const formatTime = (ts: number): string =>
+  new Date(ts).toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  })
+
+/** Date and time together, e.g. "7 Jul · 2:05 pm" — used on every transaction row. */
+export const formatDateTime = (ts: number): string =>
+  `${formatDate(ts)} · ${formatTime(ts)}`
+
 export const formatMonth = (year: number, month: number): string =>
   new Date(year, month, 1).toLocaleDateString("en-GB", {
     month: "long",

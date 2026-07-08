@@ -7,7 +7,7 @@ import { Icon } from "@/components/Icon";
 import TxnRow from "@/components/TxnRow";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { formatBDT, formatDate, formatMonth } from "@/lib/format";
+import { formatBDT, formatDateTime, formatMonth } from "@/lib/format";
 import { useContainers, useMonthData } from "@/lib/hooks";
 import { deleteTransaction } from "@/lib/repo";
 import { ROUTES } from "@/lib/routes";
@@ -133,7 +133,7 @@ const HistoryPage = () => {
                       <span className="truncate">{t.category}</span>
                     </p>
                     <p className="shrink-0 text-xs text-muted-foreground">
-                      {formatDate(t.date)}
+                      {formatDateTime(t.date)}
                     </p>
                   </Link>
                   <p className="mt-1 text-sm">

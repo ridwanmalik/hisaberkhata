@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Icon } from "@/components/Icon";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { formatBDT, formatDate } from "@/lib/format";
+import { formatBDT, formatDateTime } from "@/lib/format";
 import type { Container } from "@/lib/hooks";
 import { ROUTES } from "@/lib/routes";
 
@@ -29,7 +29,7 @@ const WithdrawalCard = ({ container }: { container: Container }) => {
               <span className="truncate">{txn.category}</span>
             </p>
             <p className="shrink-0 text-xs text-muted-foreground">
-              {formatDate(txn.date)}
+              {formatDateTime(txn.date)}
             </p>
           </div>
           <p className="mb-2 text-lg font-bold text-primary">
